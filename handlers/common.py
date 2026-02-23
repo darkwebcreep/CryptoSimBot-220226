@@ -22,38 +22,26 @@ async def get_menu_for_user(user_id):
         from keyboards import main_menu
         return main_menu()
 
+# handlers/common.py (только функция cmd_start)
+
 @router.message(Command("start"))
 async def cmd_start(message: Message):
     user = message.from_user
     user_id = user.id
     
-    # Логируем
+    # Middleware уже создал пользователя, просто логируем
     logger.info(f"👤 /start от пользователя {user_id} (@{user.username})")
     
-    # ВАЖНО: Всегда получаем/создаем пользователя
-    user_data = get_user(user_id, user.username, user.first_name)
-    
-    if user_data is None:
-        logger.error(f"❌ НЕ УДАЛОСЬ СОЗДАТЬ ПОЛЬЗОВАТЕЛЯ {user_id}")
-        await message.answer("❌ Ошибка создания профиля. Попробуй еще раз.")
-        return
-    
-    logger.info(f"✅ Пользователь {user_id} успешно загружен")
-    
-    # Проверяем, есть ли реферальный параметр
+    # Проверяем реферальный параметр
     args = message.text.split()
-    referrer_id = 0
-    
     if len(args) > 1 and args[1].startswith('ref_'):
         try:
             referrer_id = int(args[1].replace('ref_', ''))
-            if referrer_id == user_id:
-                referrer_id = 0
-            else:
+            if referrer_id != user_id:
                 from handlers.referral import process_referral
                 await process_referral(user_id, referrer_id)
         except:
-            referrer_id = 0
+            pass
     
     menu = await get_menu_for_user(user_id)
     
@@ -75,6 +63,7 @@ async def cmd_start(message: Message):
     )
     
     await message.answer(welcome_text, reply_markup=menu)
+    
 @router.message(F.text == "💰 Криптокошелёк")
 async def show_wallet(message: Message):
     user_id = message.from_user.id
