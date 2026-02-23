@@ -12,98 +12,13 @@ DB_NAME = 'crypto_sim.db'
 _local = threading.local()
 
 def get_connection():
-    """Получает соединение с БД (одно на поток) - всегда открывает новое"""
-    # Не кэшируем соединения на хостинге, открываем каждый раз заново
+    """Получает новое соединение с БД"""
     conn = sqlite3.connect(DB_NAME, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
-def init_db():
-    """Создаёт таблицы при первом запуске"""
-    conn = None
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
-        
-        # Таблица пользователей
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                user_id INTEGER PRIMARY KEY,
-                username TEXT,
-                first_name TEXT,
-                registered_date TEXT,
-                skin TEXT DEFAULT 'none',
-                owned_skins TEXT DEFAULT '[]',
-                wheel_spins INTEGER DEFAULT 0,
-                wheel_wins INTEGER DEFAULT 0,
-                energy INTEGER DEFAULT 100,
-                max_energy INTEGER DEFAULT 100,
-                last_tap_time TEXT,
-                tap_multiplier REAL DEFAULT 1.0,
-                booster_expiry TEXT,
-                referrer_id INTEGER DEFAULT 0
-            )
-        ''')
-        
-        # Таблица с балансами
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS balances (
-                user_id INTEGER PRIMARY KEY,
-                balances TEXT DEFAULT '{}'
-            )
-        ''')
-        
-        # Таблица с майнерами
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS miners (
-                user_id INTEGER,
-                miner_type TEXT,
-                quantity INTEGER DEFAULT 0,
-                PRIMARY KEY (user_id, miner_type)
-            )
-        ''')
-        
-        # Таблица рефералов
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS referrals (
-                referrer_id INTEGER,
-                referral_id INTEGER,
-                referral_date TEXT,
-                total_earned REAL DEFAULT 0,
-                PRIMARY KEY (referrer_id, referral_id)
-            )
-        ''')
-        
-        # Таблица для истории цен
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS price_history (
-                currency TEXT,
-                price REAL,
-                timestamp TEXT,
-                PRIMARY KEY (currency, timestamp)
-            )
-        ''')
-        
-        # Индексы
-        cur.execute('CREATE INDEX IF NOT EXISTS idx_users_id ON users(user_id)')
-        cur.execute('CREATE INDEX IF NOT EXISTS idx_balances_user ON balances(user_id)')
-        cur.execute('CREATE INDEX IF NOT EXISTS idx_miners_user ON miners(user_id)')
-        cur.execute('CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id)')
-        
-        conn.commit()
-        logger.info("✅ Инициализация БД завершена")
-        
-    except Exception as e:
-        logger.error(f"❌ Ошибка при создании таблиц: {e}", exc_info=True)
-        if conn:
-            conn.rollback()
-        raise
-    finally:
-        if conn:
-            conn.close()
-
 def execute_query(query, params=(), fetch_one=False, fetch_all=False):
-    """Универсальная функция для выполнения запросов с автоматическим закрытием соединения"""
+    """Универсальная функция для выполнения запросов"""
     conn = None
     try:
         conn = get_connection()
@@ -128,6 +43,80 @@ def execute_query(query, params=(), fetch_one=False, fetch_all=False):
         if conn:
             conn.close()
 
+def init_db():
+    """Создаёт таблицы при первом запуске"""
+    try:
+        # Таблица пользователей
+        execute_query('''
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY,
+                username TEXT,
+                first_name TEXT,
+                registered_date TEXT,
+                skin TEXT DEFAULT 'none',
+                owned_skins TEXT DEFAULT '[]',
+                wheel_spins INTEGER DEFAULT 0,
+                wheel_wins INTEGER DEFAULT 0,
+                energy INTEGER DEFAULT 100,
+                max_energy INTEGER DEFAULT 100,
+                last_tap_time TEXT,
+                tap_multiplier REAL DEFAULT 1.0,
+                booster_expiry TEXT,
+                referrer_id INTEGER DEFAULT 0
+            )
+        ''')
+        
+        # Таблица с балансами
+        execute_query('''
+            CREATE TABLE IF NOT EXISTS balances (
+                user_id INTEGER PRIMARY KEY,
+                balances TEXT DEFAULT '{}'
+            )
+        ''')
+        
+        # Таблица с майнерами
+        execute_query('''
+            CREATE TABLE IF NOT EXISTS miners (
+                user_id INTEGER,
+                miner_type TEXT,
+                quantity INTEGER DEFAULT 0,
+                PRIMARY KEY (user_id, miner_type)
+            )
+        ''')
+        
+        # Таблица рефералов
+        execute_query('''
+            CREATE TABLE IF NOT EXISTS referrals (
+                referrer_id INTEGER,
+                referral_id INTEGER,
+                referral_date TEXT,
+                total_earned REAL DEFAULT 0,
+                PRIMARY KEY (referrer_id, referral_id)
+            )
+        ''')
+        
+        # Таблица для истории цен
+        execute_query('''
+            CREATE TABLE IF NOT EXISTS price_history (
+                currency TEXT,
+                price REAL,
+                timestamp TEXT,
+                PRIMARY KEY (currency, timestamp)
+            )
+        ''')
+        
+        # Индексы
+        execute_query('CREATE INDEX IF NOT EXISTS idx_users_id ON users(user_id)')
+        execute_query('CREATE INDEX IF NOT EXISTS idx_balances_user ON balances(user_id)')
+        execute_query('CREATE INDEX IF NOT EXISTS idx_miners_user ON miners(user_id)')
+        execute_query('CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id)')
+        
+        logger.info("✅ Инициализация БД завершена")
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка при создании таблиц: {e}", exc_info=True)
+        raise
+
 # ==================== ПОЛЬЗОВАТЕЛИ ====================
 
 @lru_cache(maxsize=128)
@@ -140,31 +129,63 @@ def clear_cache():
     get_user_cached.cache_clear()
     get_balance_cached.cache_clear()
 
+def user_exists(user_id):
+    """Проверяет, существует ли пользователь"""
+    try:
+        result = execute_query('SELECT user_id FROM users WHERE user_id = ?', (user_id,), fetch_one=True)
+        return result is not None
+    except Exception as e:
+        logger.error(f"Ошибка при проверке существования пользователя {user_id}: {e}")
+        return False
+
+def create_user(user_id, username=None, first_name=None, referrer_id=0):
+    """Создает нового пользователя"""
+    logger.info(f"👤 Создание нового пользователя {username or first_name} (ID: {user_id})")
+    try:
+        # Создаем пользователя
+        execute_query('''
+            INSERT INTO users 
+            (user_id, username, first_name, registered_date, skin, owned_skins, 
+             energy, max_energy, tap_multiplier, referrer_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (user_id, username, first_name, datetime.now().isoformat(), 
+              'none', '[]', 100, 100, 1.0, referrer_id))
+        
+        # Создаем пустой баланс
+        execute_query('INSERT INTO balances (user_id, balances) VALUES (?, ?)', 
+                     (user_id, '{}'))
+        
+        clear_cache()
+        logger.info(f"✅ Пользователь {user_id} успешно создан")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Ошибка при создании пользователя {user_id}: {e}")
+        return False
+
 def get_user(user_id, username=None, first_name=None, referrer_id=0):
     """Получает пользователя из БД или создаёт нового"""
-    user = get_user_cached(user_id)
-    
-    if not user:
-        logger.info(f"👤 Создание нового пользователя {username or first_name} (ID: {user_id})")
-        try:
-            execute_query('''
-                INSERT INTO users 
-                (user_id, username, first_name, registered_date, skin, owned_skins, 
-                 energy, max_energy, tap_multiplier, referrer_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (user_id, username, first_name, datetime.now().isoformat(), 
-                  'none', '[]', 100, 100, 1.0, referrer_id))
+    try:
+        # Проверяем существование пользователя
+        if not user_exists(user_id):
+            logger.info(f"👤 Пользователь {user_id} не найден, создаем...")
+            success = create_user(user_id, username, first_name, referrer_id)
+            if not success:
+                logger.error(f"❌ Не удалось создать пользователя {user_id}")
+                return None
+        
+        # Получаем данные пользователя
+        user = execute_query('SELECT * FROM users WHERE user_id = ?', (user_id,), fetch_one=True)
+        
+        if user:
+            logger.debug(f"✅ Пользователь {user_id} найден")
+            return user
+        else:
+            logger.error(f"❌ Пользователь {user_id} не найден после создания")
+            return None
             
-            execute_query('INSERT INTO balances (user_id, balances) VALUES (?, ?)', 
-                         (user_id, '{}'))
-            clear_cache()
-            logger.info(f"✅ Пользователь {user_id} создан")
-        except Exception as e:
-            logger.error(f"Ошибка при создании пользователя {user_id}: {e}")
-    else:
-        logger.debug(f"✅ Пользователь {user_id} найден")
-    
-    return user
+    except Exception as e:
+        logger.error(f"❌ Критическая ошибка в get_user для {user_id}: {e}")
+        return None
 
 # ==================== БАЛАНСЫ ====================
 
@@ -210,10 +231,6 @@ def update_balance(user_id, currency, amount, operation='add'):
 
 def get_user_energy(user_id):
     """Получает текущую энергию пользователя"""
-    user = get_user_cached(user_id)
-    if not user:
-        get_user(user_id)
-    
     try:
         result = execute_query('SELECT energy, max_energy, last_tap_time FROM users WHERE user_id = ?', 
                               (user_id,), fetch_one=True)
@@ -260,10 +277,6 @@ def add_max_energy(user_id, amount):
 
 def get_user_booster(user_id):
     """Получает информацию о бустере пользователя"""
-    user = get_user_cached(user_id)
-    if not user:
-        get_user(user_id)
-    
     try:
         result = execute_query('SELECT tap_multiplier, booster_expiry FROM users WHERE user_id = ?', 
                               (user_id,), fetch_one=True)
@@ -288,10 +301,6 @@ def get_user_booster(user_id):
 
 def set_user_booster(user_id, multiplier, duration_seconds):
     """Устанавливает бустер пользователю"""
-    user = get_user_cached(user_id)
-    if not user:
-        get_user(user_id)
-    
     try:
         expiry = (datetime.now() + timedelta(seconds=duration_seconds)).isoformat()
         execute_query('UPDATE users SET tap_multiplier = ?, booster_expiry = ? WHERE user_id = ?',
