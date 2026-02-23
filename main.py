@@ -1,0 +1,155 @@
+# main.py
+import asyncio
+import logging
+import sys
+import os
+import time
+from datetime import datetime
+from pathlib import Path
+from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.fsm.storage.memory import MemoryStorage
+
+from config import BOT_TOKEN, ADMIN_ID
+from database import init_db
+from handlers import common, mining, shop, admin, exchange, skinshop, referral, price_watch
+from handlers.volatility import update_prices
+from middlewares import ThrottlingMiddleware
+
+# ==================== СОЗДАЕМ ПАПКУ ДЛЯ ЛОГОВ ====================
+LOG_DIR = Path("logs")
+LOG_DIR.mkdir(exist_ok=True)
+
+# ==================== НАСТРОЙКА КРАСИВОГО ЛОГИРОВАНИЯ ====================
+
+class Colors:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    END = '\033[0m'
+    
+    ICONS = {
+        'info': 'ℹ️',
+        'success': '✅',
+        'warning': '⚠️',
+        'error': '❌',
+        'critical': '🔥',
+        'database': '🗄️',
+        'bot': '🤖',
+        'user': '👤',
+        'time': '⏱️'
+    }
+
+class ColoredFormatter(logging.Formatter):
+    format_str = "%(asctime)s.%(msecs)03d"
+    
+    FORMATS = {
+        logging.DEBUG: Colors.BLUE + format_str + " [🐛 DEBUG] %(message)s" + Colors.END,
+        logging.INFO: Colors.GREEN + format_str + " [ℹ️ INFO] %(message)s" + Colors.END,
+        logging.WARNING: Colors.YELLOW + format_str + " [⚠️ WARNING] %(message)s" + Colors.END,
+        logging.ERROR: Colors.RED + format_str + " [❌ ERROR] %(message)s" + Colors.END,
+        logging.CRITICAL: Colors.RED + Colors.BOLD + format_str + " [🔥 CRITICAL] %(message)s" + Colors.END,
+    }
+
+    def format(self, record):
+        log_fmt = self.FORMATS.get(record.levelno)
+        formatter = logging.Formatter(log_fmt, datefmt='%H:%M:%S')
+        return formatter.format(record)
+
+# Настройка корневого логгера
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(ColoredFormatter())
+
+log_file = LOG_DIR / f'bot_log_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt'
+file_handler = logging.FileHandler(log_file, encoding='utf-8')
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(logging.Formatter(
+    '[%(asctime)s] [%(levelname)s] [%(name)s] [%(filename)s:%(lineno)d] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+))
+
+logger.addHandler(console_handler)
+logger.addHandler(file_handler)
+
+logging.getLogger('aiogram').setLevel(logging.WARNING)
+logging.getLogger('asyncio').setLevel(logging.WARNING)
+logging.getLogger('aiohttp').setLevel(logging.WARNING)
+
+# ==================== ЗАПУСК ====================
+
+async def main():
+    try:
+        print(Colors.CYAN + Colors.BOLD + """
+╔══════════════════════════════════════════════════════════╗
+║                    🐶 LEDOGE BOT v220226                 ║
+║                 Автор: Stardamnplugg                     ║
+╚══════════════════════════════════════════════════════════╝
+""" + Colors.END)
+        
+        logger.info(f"{Colors.ICONS['database']} Инициализация базы данных...")
+        start_time = time.time()
+        init_db()
+        logger.info(f"{Colors.ICONS['success']} База данных готова ({(time.time()-start_time)*1000:.1f}ms)")
+        
+        logger.info(f"{Colors.ICONS['bot']} Инициализация бота...")
+        storage = MemoryStorage()
+        bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+        dp = Dispatcher(storage=storage)
+        
+        dp.message.middleware(ThrottlingMiddleware(0.3))
+        dp.callback_query.middleware(ThrottlingMiddleware(0.3))
+        
+        logger.info(f"{Colors.ICONS['info']} Регистрация хендлеров...")
+        routers = [
+            ("common", common.router),
+            ("mining", mining.router),
+            ("shop", shop.router),
+            ("admin", admin.router),
+            ("exchange", exchange.router),
+            ("skinshop", skinshop.router),
+            ("referral", referral.router),
+            ("price_watch", price_watch.router),
+        ]
+        
+        for name, router in routers:
+            dp.include_router(router)
+            logger.info(f"  {Colors.ICONS['success']} {name}.py загружен")
+        
+        bot_info = await bot.get_me()
+        logger.info(f"{Colors.ICONS['bot']} Бот: @{bot_info.username} (ID: {bot_info.id})")
+        logger.info(f"{Colors.ICONS['user']} Админ ID: {ADMIN_ID}")
+        logger.info(f"{Colors.ICONS['database']} Логи сохраняются в: {LOG_DIR}")
+        
+        asyncio.create_task(update_prices())
+        logger.info(f"{Colors.ICONS['success']} Фоновая задача волатильности запущена")
+        
+        print(Colors.GREEN + Colors.BOLD + """
+╔══════════════════════════════════════════════════════════╗
+║                    ✅ БОТ ГОТОВ К РАБОТЕ                 ║
+╚══════════════════════════════════════════════════════════╝
+""" + Colors.END)
+        
+        await dp.start_polling(bot, allowed_updates=['message', 'callback_query'])
+        
+    except Exception as e:
+        logger.critical(f"{Colors.ICONS['critical']} КРИТИЧЕСКАЯ ОШИБКА: {e}", exc_info=True)
+    finally:
+        logger.info(f"{Colors.ICONS['warning']} Бот остановлен")
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info(f"{Colors.ICONS['warning']} Бот остановлен пользователем (Ctrl+C)")
+    except Exception as e:
+        logger.critical(f"{Colors.ICONS['critical']} Непредвиденная ошибка: {e}", exc_info=True)
