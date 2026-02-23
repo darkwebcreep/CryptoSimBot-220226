@@ -479,32 +479,68 @@ def spin_wheel(user_id, bet_currency='ledoge', bet_amount=10):
 
 # ==================== ТОП ПОЛЬЗОВАТЕЛЕЙ ====================
 
+# database.py (замени существующую функцию get_top_users)
+
 def get_top_users(limit=10):
-    """Топ пользователей"""
-    results = execute_query('''
-        SELECT users.user_id, users.username, users.first_name, users.skin, balances.balances
-        FROM users
-        JOIN balances ON users.user_id = balances.user_id
-    ''', fetch_all=True)
-    
-    users = []
-    if results:
-        for row in results:
+    """Топ пользователей по балансу LEDOGE (показывает всех игроков)"""
+    try:
+        # Получаем всех пользователей с их балансами
+        users_data = execute_query('''
+            SELECT users.user_id, users.username, users.first_name, users.skin, balances.balances
+            FROM users
+            LEFT JOIN balances ON users.user_id = balances.user_id
+            ORDER BY users.user_id DESC
+        ''', fetch_all=True)
+        
+        if not users_data:
+            logger.info("📭 Нет пользователей в базе данных")
+            return []
+        
+        users = []
+        for row in users_data:
             try:
-                balances = json.loads(row[4])
-                ledoge = balances.get('ledoge', 0)
+                user_id = row[0]
+                username = row[1]
+                first_name = row[2] or "Без имени"
+                skin = row[3] or 'none'
+                balances_json = row[4]
+                
+                # Парсим балансы
+                if balances_json:
+                    balances = json.loads(balances_json)
+                    ledoge_balance = balances.get('ledoge', 0)
+                else:
+                    ledoge_balance = 0
+                
+                # Добавляем ВСЕХ пользователей, даже с нулевым балансом
                 users.append({
-                    'user_id': row[0],
-                    'username': row[1],
-                    'first_name': row[2],
-                    'skin': row[3],
-                    'ledoge': ledoge
+                    'user_id': user_id,
+                    'username': username,
+                    'first_name': first_name,
+                    'skin': skin,
+                    'ledoge': ledoge_balance
                 })
-            except:
+                
+            except Exception as e:
+                logger.error(f"❌ Ошибка при обработке пользователя {row[0]}: {e}")
                 continue
-    
-    users.sort(key=lambda x: x['ledoge'], reverse=True)
-    return users[:limit]
+        
+        # Сортируем по убыванию LEDOGE (те, у кого больше, будут выше)
+        users.sort(key=lambda x: x['ledoge'], reverse=True)
+        
+        # Логируем результат для отладки
+        logger.info(f"📊 Всего пользователей в БД: {len(users)}")
+        if users:
+            logger.info(f"🏆 Лидер: {users[0]['first_name']} с балансом {users[0]['ledoge']:.2f} LEDOGE")
+            # Покажем первых 3 для примера
+            for i, u in enumerate(users[:3]):
+                logger.info(f"   {i+1}. {u['first_name']} - {u['ledoge']:.2f} LEDOGE")
+        
+        return users[:limit]
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка в get_top_users: {e}")
+        return []
 
 # ==================== РЕФЕРАЛЫ ====================
 
