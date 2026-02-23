@@ -2,9 +2,9 @@
 import asyncio
 import random
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from aiogram import Router, F
-from aiogram.types import Message
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
@@ -23,6 +23,7 @@ router = Router()
 
 class MiningStates(StatesGroup):
     mining_in_progress = State()
+    confirm_restart = State()
 
 # ==================== ТЕКСТОВЫЙ ПРОГРЕСС-БАР ====================
 def create_text_progress(current, total, length=10):
@@ -30,6 +31,30 @@ def create_text_progress(current, total, length=10):
     filled = int((current / total) * length)
     empty = length - filled
     return "█" * filled + "░" * empty
+
+# ==================== ЗАЩИТА ОТ ДДОС ====================
+last_mining_time = {}
+
+def can_start_mining(user_id):
+    """Проверяет, можно ли начать майнинг"""
+    if user_id in last_mining_time:
+        last_time = last_mining_time[user_id]
+        if datetime.now() - last_time < timedelta(seconds=10):
+            return False, int(10 - (datetime.now() - last_time).seconds)
+    return True, 0
+
+async def clean_old_mining_records():
+    """Очищает старые записи о майнинге"""
+    while True:
+        await asyncio.sleep(3600)
+        now = datetime.now()
+        to_delete = []
+        for user_id, last_time in last_mining_time.items():
+            if now - last_time > timedelta(minutes=5):
+                to_delete.append(user_id)
+        for user_id in to_delete:
+            del last_mining_time[user_id]
+        logger.debug(f"🧹 Очищено {len(to_delete)} старых записей майнинга")
 
 # ==================== МАЙНИНГ ====================
 
@@ -96,12 +121,10 @@ async def show_tap_menu(message: Message):
         
         text = create_header("ТАПАЛКА", "☝️") + "\n\n"
         
-        # Энергия с текстовым прогресс-баром
         energy_bar = create_text_progress(energy, max_energy, 15)
         text += f"⚡ <b>ЭНЕРГИЯ</b>\n"
         text += f"[{energy_bar}] {energy}/{max_energy}\n\n"
         
-        # Множитель
         text += f"✨ <b>МНОЖИТЕЛЬ</b>: x{booster['multiplier']}\n"
         if booster['expiry']:
             time_left = booster['expiry'] - datetime.now()
@@ -142,22 +165,15 @@ async def show_boosters(message: Message):
     
     await message.answer(text, reply_markup=boosters_menu())
 
-# ==================== ФУНКЦИЯ МАЙНИНГА С ПРОГРЕСС-БАРОМ ====================
+# ==================== ОСНОВНАЯ ФУНКЦИЯ МАЙНИНГА ====================
 
-async def start_mining(message: Message, state: FSMContext, coin_name: str, base_chance: float, reward: float, wait_time: int, currency: str):
-    user_id = message.from_user.id
-    username = message.from_user.username or message.from_user.first_name
-    
+async def start_mining_process(message: Message, state: FSMContext, coin_name: str, base_chance: float, reward: float, wait_time: int, currency: str, username: str, user_id: int):
+    """Основной процесс майнинга"""
     bonus_multiplier = get_miner_bonus(user_id)
     final_chance = min(base_chance * bonus_multiplier, 0.95)
     
     logger.info(f"⛏ {username} начал майнинг {coin_name}")
     logger.info(f"📊 Базовый шанс: {base_chance*100}%, Бонус: x{bonus_multiplier:.2f}, Итог: {final_chance*100:.1f}%")
-    
-    current_state = await state.get_state()
-    if current_state:
-        await message.answer("⏳ Ты уже майнишь! Подожди окончания процесса.")
-        return
     
     try:
         await state.set_state(MiningStates.mining_in_progress)
@@ -166,7 +182,6 @@ async def start_mining(message: Message, state: FSMContext, coin_name: str, base
         if bonus_multiplier > 1.0:
             bonus_text = f"\n✨ Бонус от майнеров: x{bonus_multiplier:.2f} к шансу"
         
-        # Отправляем начальное сообщение
         progress_msg = await message.answer(
             f"🪙 <b>Майнинг {coin_name} запущен...</b>\n\n"
             f"⏱ Время: {wait_time} сек\n"
@@ -176,59 +191,143 @@ async def start_mining(message: Message, state: FSMContext, coin_name: str, base
             f"<i>Идет поиск блока...</i>"
         )
         
-        # Анимируем прогресс-бар
+        mining_completed = True
         for i in range(1, wait_time + 1):
+            current_state = await state.get_state()
+            if current_state != MiningStates.mining_in_progress:
+                mining_completed = False
+                break
+                
             await asyncio.sleep(1)
             
             progress_bar = create_text_progress(i, wait_time, 10)
             percent = int((i / wait_time) * 100)
             
-            await progress_msg.edit_text(
-                f"🪙 <b>Майнинг {coin_name}...</b>\n\n"
-                f"⏱ Прогресс: [{progress_bar}] {percent}%\n"
-                f"📊 Шанс успеха: {final_chance*100:.1f}%\n\n"
-                f"<i>Осталось {wait_time - i} сек...</i>"
-            )
+            try:
+                await progress_msg.edit_text(
+                    f"🪙 <b>Майнинг {coin_name}...</b>\n\n"
+                    f"⏱ Прогресс: [{progress_bar}] {percent}%\n"
+                    f"📊 Шанс успеха: {final_chance*100:.1f}%\n\n"
+                    f"<i>Осталось {wait_time - i} сек...</i>"
+                )
+            except:
+                pass
             
             if i % 2 == 0:
                 logger.debug(f"⛏ {username} майнит... {i}/{wait_time} сек")
         
-        # Результат майнинга
-        if random.random() < final_chance:
-            update_balance(user_id, currency, reward, 'add')
-            new_balance = get_balance(user_id, currency)
-            logger.info(f"⛏ ✅ {username} УСПЕХ! Получено {reward} {currency}")
-            
-            if isinstance(new_balance, float) and new_balance < 0.001:
-                await progress_msg.edit_text(
-                    f"🎉 <b>ПОЗДРАВЛЯЮ!</b>\n\n"
-                    f"Ты намайнил: {reward:.8f} {currency}\n"
-                    f"💰 Баланс: {new_balance:.8f} {currency}"
-                )
+        if mining_completed:
+            if random.random() < final_chance:
+                update_balance(user_id, currency, reward, 'add')
+                new_balance = get_balance(user_id, currency)
+                logger.info(f"⛏ ✅ {username} УСПЕХ! Получено {reward} {currency}")
+                
+                if isinstance(new_balance, float) and new_balance < 0.001:
+                    result_text = (
+                        f"🎉 <b>ПОЗДРАВЛЯЮ!</b>\n\n"
+                        f"Ты намайнил: {reward:.8f} {currency}\n"
+                        f"💰 Баланс: {new_balance:.8f} {currency}"
+                    )
+                else:
+                    result_text = (
+                        f"🎉 <b>ПОЗДРАВЛЯЮ!</b>\n\n"
+                        f"Ты намайнил: {reward:.2f} {currency}\n"
+                        f"💰 Баланс: {new_balance:.2f} {currency}"
+                    )
             else:
-                await progress_msg.edit_text(
-                    f"🎉 <b>ПОЗДРАВЛЯЮ!</b>\n\n"
-                    f"Ты намайнил: {reward:.2f} {currency}\n"
-                    f"💰 Баланс: {new_balance:.2f} {currency}"
+                consolation = random.randint(1, 3)
+                update_balance(user_id, 'ledoge', consolation, 'add')
+                new_balance = get_balance(user_id, 'ledoge')
+                logger.info(f"⛏ ❌ {username} НЕУДАЧА. +{consolation} LEDOGE")
+                
+                result_text = (
+                    f"😢 <b>Неудача</b>\n\n"
+                    f"Блок не найден...\n"
+                    f"Но за старание: +{consolation} LEDOGE\n"
+                    f"💰 LEDOGE: {new_balance:.2f}"
                 )
-        else:
-            consolation = random.randint(1, 3)
-            update_balance(user_id, 'ledoge', consolation, 'add')
-            new_balance = get_balance(user_id, 'ledoge')
-            logger.info(f"⛏ ❌ {username} НЕУДАЧА. +{consolation} LEDOGE")
             
-            await progress_msg.edit_text(
-                f"😢 <b>Неудача</b>\n\n"
-                f"Блок не найден...\n"
-                f"Но за старание: +{consolation} LEDOGE\n"
-                f"💰 LEDOGE: {new_balance:.2f}"
-            )
+            try:
+                await progress_msg.edit_text(result_text)
+            except:
+                await message.answer(result_text)
         
     except Exception as e:
         logger.error(f"⛏ ОШИБКА для {username}: {e}")
         await message.answer(f"❌ Ошибка: {e}")
     finally:
         await state.clear()
+
+async def start_mining(message: Message, state: FSMContext, coin_name: str, base_chance: float, reward: float, wait_time: int, currency: str):
+    user_id = message.from_user.id
+    username = message.from_user.username or message.from_user.first_name
+    
+    # Проверяем тайм-аут
+    can_start, wait_time_left = can_start_mining(user_id)
+    if not can_start:
+        await message.answer(f"⏳ Подожди еще {wait_time_left} секунд перед новым майнингом")
+        return
+    
+    # Проверяем, не майнит ли уже
+    current_state = await state.get_state()
+    if current_state:
+        kb = [
+            [KeyboardButton(text="✅ Да, прервать")],
+            [KeyboardButton(text="❌ Нет, продолжать")]
+        ]
+        markup = ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+        
+        await message.answer(
+            "⏳ Ты уже майнишь! Хочешь прервать текущий майнинг и начать новый?",
+            reply_markup=markup
+        )
+        await state.update_data(
+            new_mining={
+                'coin_name': coin_name,
+                'base_chance': base_chance,
+                'reward': reward,
+                'wait_time': wait_time,
+                'currency': currency
+            }
+        )
+        await state.set_state(MiningStates.confirm_restart)
+        return
+    
+    last_mining_time[user_id] = datetime.now()
+    await start_mining_process(message, state, coin_name, base_chance, reward, wait_time, currency, username, user_id)
+
+@router.message(MiningStates.confirm_restart)
+async def process_restart_confirm(message: Message, state: FSMContext):
+    """Обрабатывает подтверждение перезапуска майнинга"""
+    user_id = message.from_user.id
+    username = message.from_user.username or message.from_user.first_name
+    
+    if message.text == "✅ Да, прервать":
+        data = await state.get_data()
+        new_mining = data.get('new_mining')
+        
+        if new_mining:
+            await state.clear()
+            last_mining_time[user_id] = datetime.now()
+            await start_mining_process(
+                message, state,
+                new_mining['coin_name'],
+                new_mining['base_chance'],
+                new_mining['reward'],
+                new_mining['wait_time'],
+                new_mining['currency'],
+                username, user_id
+            )
+        else:
+            await state.clear()
+            await message.answer("❌ Ошибка при перезапуске. Попробуй снова.")
+    
+    elif message.text == "❌ Нет, продолжать":
+        await state.clear()
+        await message.answer("✅ Продолжай текущий майнинг!")
+    
+    else:
+        await message.answer("❌ Используй кнопки Да или Нет")
 
 # ==================== ОБРАБОТЧИКИ МАЙНИНГА ====================
 
@@ -504,6 +603,9 @@ async def back_to_main(message: Message):
     user_id = message.from_user.id
     username = message.from_user.username or message.from_user.first_name
     logger.info(f"◀ {username} вернулся в главное меню")
+    
+    # Очищаем состояние при выходе в меню
+    await state.clear()
     
     if user_id == ADMIN_ID:
         from keyboards import admin_keyboard
