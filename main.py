@@ -3,6 +3,7 @@ import asyncio
 import logging
 import sys
 import os
+import signal
 import time
 from datetime import datetime
 from pathlib import Path
@@ -10,12 +11,25 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.exceptions import TelegramConflictError
 
 from config import BOT_TOKEN, ADMIN_ID
 from database import init_db
 from handlers import common, mining, shop, admin, exchange, skinshop, referral, price_watch
 from handlers.volatility import update_prices
 from middlewares import ThrottlingMiddleware
+
+# Глобальная переменная для отслеживания состояния
+is_running = True
+
+def signal_handler(sig, frame):
+    global is_running
+    logger.info("🛑 Получен сигнал остановки, завершаем работу...")
+    is_running = False
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 # ==================== СОЗДАЕМ ПАПКУ ДЛЯ ЛОГОВ ====================
 LOG_DIR = Path("logs")
@@ -88,6 +102,7 @@ logging.getLogger('aiohttp').setLevel(logging.WARNING)
 # ==================== ЗАПУСК ====================
 
 async def main():
+    global is_running
     try:
         print(Colors.CYAN + Colors.BOLD + """
 ╔══════════════════════════════════════════════════════════╗
@@ -133,18 +148,37 @@ async def main():
         asyncio.create_task(update_prices())
         logger.info(f"{Colors.ICONS['success']} Фоновая задача волатильности запущена")
         
+        # Запускаем фоновую задачу для очистки майнинга
+        from handlers.mining import clean_old_mining_records
+        asyncio.create_task(clean_old_mining_records())
+        logger.info(f"{Colors.ICONS['success']} Фоновая задача очистки майнинга запущена")
+        
         print(Colors.GREEN + Colors.BOLD + """
 ╔══════════════════════════════════════════════════════════╗
 ║                    ✅ БОТ ГОТОВ К РАБОТЕ                 ║
 ╚══════════════════════════════════════════════════════════╝
 """ + Colors.END)
         
-        await dp.start_polling(bot, allowed_updates=['message', 'callback_query'])
+        # Основной цикл с обработкой ошибок
+        while is_running:
+            try:
+                logger.info("🚀 Запуск polling...")
+                await dp.start_polling(bot, allowed_updates=['message', 'callback_query'])
+            except TelegramConflictError:
+                logger.warning("⚠️ Обнаружен конфликт, переподключаемся через 5 секунд...")
+                await asyncio.sleep(5)
+                continue
+            except Exception as e:
+                logger.error(f"❌ Ошибка polling: {e}")
+                await asyncio.sleep(3)
+                continue
+            break
         
     except Exception as e:
         logger.critical(f"{Colors.ICONS['critical']} КРИТИЧЕСКАЯ ОШИБКА: {e}", exc_info=True)
     finally:
         logger.info(f"{Colors.ICONS['warning']} Бот остановлен")
+        await bot.session.close()
 
 if __name__ == "__main__":
     try:
