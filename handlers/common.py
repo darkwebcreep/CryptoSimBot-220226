@@ -39,11 +39,20 @@ async def cmd_start(message: Message):
         except:
             referrer_id = 0
     
-    # Создаем пользователя с referrer_id
-    get_user(user_id, user.username, user.first_name, referrer_id)
+    # Логируем попытку входа
+    logger.info(f"👤 Пользователь @{user.username or 'no_username'} (ID: {user_id}) запустил бота")
     
-    # Если есть реферер, обрабатываем реферала
+    # ВАЖНО: Получаем или создаем пользователя
+    user_data = get_user(user_id, user.username, user.first_name, referrer_id)
+    
+    if user_data is None:
+        logger.error(f"❌ Не удалось создать пользователя {user_id}")
+        await message.answer("❌ Ошибка при создании профиля. Попробуй позже.")
+        return
+    
+    # Если есть реферер, обрабатываем реферала (только для новых пользователей)
     if referrer_id > 0:
+        # Проверяем, что пользователь только что создан (можно по дате регистрации)
         from handlers.referral import process_referral
         await process_referral(user_id, referrer_id)
     
@@ -81,8 +90,6 @@ async def show_wallet(message: Message):
     owned_skins = get_user_owned_skins(user_id)
     current_skin = get_user_skin(user_id)
     
-    # ВАЖНО: В SKINS уже есть эмодзи в названии, поэтому не нужно их добавлять отдельно
-    # Просто передаем как есть
     text = create_wallet_info(balances, miners, MINERS, owned_skins, SKINS, current_skin)
     
     await message.answer(text)
@@ -95,7 +102,6 @@ async def show_top(message: Message):
         await message.answer("📭 Пока нет игроков в топе")
         return
     
-    # Используем функцию из ui_utils для красивого отображения
     text = create_top_list(top_users, SKINS)
     
     await message.answer(text)
