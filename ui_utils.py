@@ -135,32 +135,55 @@ def create_wardrobe_list(skins, owned_skins, current_skin):
     return "\n".join(lines)
 
 def create_top_list(users, skins_data):
-    """Создаёт топ пользователей (простая версия)"""
+    """Создаёт топ пользователей (показывает ВСЕХ, даже с нулевым балансом)"""
     medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
     
     lines = []
     lines.append("🏆 <b>ТОП МАЙНЕРОВ</b>")
     lines.append("─" * 30)
     
-    for i, user in enumerate(users[:10]):
-        medal = medals[i] if i < len(medals) else f"{i+1}."
+    if not users:
+        lines.append("📭 Пока нет игроков")
+        lines.append("─" * 30)
+        return "\n".join(lines)
+    
+    # Показываем ВСЕХ пользователей
+    for i, user in enumerate(users):
+        # Для первых 10 используем медали, для остальных просто номер
+        if i < 10:
+            medal = medals[i]
+        else:
+            medal = f"{i+1}."
+        
         name = user['first_name'] or user['username'] or f"User{user['user_id']}"
-        name = name[:20] + "..." if len(name) > 20 else name
+        name = name[:15] + "..." if len(name) > 15 else name
         
-        # Скин пользователя - ВАЖНО: в skins_data уже есть эмодзи в названии
-        skin_prefix = ""
+        # Скин пользователя
+        skin_emoji = ""
         if user['skin'] != 'none' and user['skin'] in skins_data:
-            skin_prefix = skins_data[user['skin']]['emoji'] + " "
+            skin_emoji = skins_data[user['skin']]['emoji'] + " "
         
-        # Прогресс-бар
-        max_balance = users[0]['ledoge']
-        bar = create_progress_bar(user['ledoge'], max_balance, 8, "⭐")
+        # Форматируем баланс
+        balance = user['ledoge']
+        if balance >= 1_000_000:
+            balance_str = f"{balance/1_000_000:.1f}M"
+        elif balance >= 1_000:
+            balance_str = f"{balance/1_000:.1f}K"
+        else:
+            balance_str = f"{balance:.2f}"
         
-        lines.append(f"{medal} {skin_prefix}{name}")
-        lines.append(f"   {bar} {format_number(user['ledoge'])} 🐶")
-        lines.append("")
+        # Добавляем индикатор нулевого баланса
+        zero_indicator = " 🆕" if balance == 0 else ""
+        
+        lines.append(f"{medal} {skin_emoji}{name}{zero_indicator}")
+        lines.append(f"   💰 {balance_str} 🐶")
+        
+        # Добавляем разделитель между игроками (кроме последнего)
+        if i < len(users) - 1:
+            lines.append("   " + "─" * 26)
     
     lines.append("─" * 30)
+    
     return "\n".join(lines)
 
 def create_booster_info(booster, balance):
