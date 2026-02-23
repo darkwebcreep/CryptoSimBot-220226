@@ -19,13 +19,51 @@ from handlers import common, mining, shop, admin, exchange, skinshop, referral, 
 from handlers.volatility import update_prices
 from middlewares import ThrottlingMiddleware
 
-# Глобальная переменная для отслеживания состояния
-is_running = True
+# ==================== ФАЙЛ БЛОКИРОВКИ ====================
+LOCK_FILE = "bot.lock"
 
+def check_lock():
+    """Проверяет, не запущен ли уже бот"""
+    if os.path.exists(LOCK_FILE):
+        try:
+            with open(LOCK_FILE, 'r') as f:
+                pid = f.read().strip()
+            # Проверяем, существует ли процесс с таким PID
+            if os.name == 'nt':  # Windows
+                import subprocess
+                result = subprocess.run(f'tasklist /FI "PID eq {pid}"', capture_output=True, text=True)
+                if str(pid) in result.stdout:
+                    print(f"❌ Бот уже запущен с PID {pid}")
+                    return False
+            else:  # Linux/Mac
+                try:
+                    os.kill(int(pid), 0)
+                    print(f"❌ Бот уже запущен с PID {pid}")
+                    return False
+                except:
+                    pass
+        except:
+            pass
+    
+    # Создаем новый lock-файл
+    with open(LOCK_FILE, 'w') as f:
+        f.write(str(os.getpid()))
+    print(f"✅ Lock-файл создан с PID {os.getpid()}")
+    return True
+
+def remove_lock():
+    """Удаляет файл-блокировку"""
+    try:
+        if os.path.exists(LOCK_FILE):
+            os.remove(LOCK_FILE)
+            print("✅ Lock-файл удален")
+    except:
+        pass
+
+# ==================== ОБРАБОТКА СИГНАЛОВ ====================
 def signal_handler(sig, frame):
-    global is_running
-    logger.info("🛑 Получен сигнал остановки, завершаем работу...")
-    is_running = False
+    print(f"\n🛑 Получен сигнал {sig}, завершаем работу...")
+    remove_lock()
     sys.exit(0)
 
 signal.signal(signal.SIGINT, signal_handler)
@@ -102,7 +140,11 @@ logging.getLogger('aiohttp').setLevel(logging.WARNING)
 # ==================== ЗАПУСК ====================
 
 async def main():
-    global is_running
+    # Проверяем блокировку
+    if not check_lock():
+        logger.error("❌ Бот уже запущен! Завершаем работу.")
+        sys.exit(1)
+    
     try:
         print(Colors.CYAN + Colors.BOLD + """
 ╔══════════════════════════════════════════════════════════╗
@@ -159,24 +201,32 @@ async def main():
 ╚══════════════════════════════════════════════════════════╝
 """ + Colors.END)
         
+        # Задержка перед запуском
+        logger.info("⏳ Ожидание 5 секунд перед запуском...")
+        await asyncio.sleep(5)
+        
         # Основной цикл с обработкой ошибок
-        while is_running:
+        retry_count = 0
+        max_retries = 5
+        
+        while retry_count < max_retries:
             try:
                 logger.info("🚀 Запуск polling...")
                 await dp.start_polling(bot, allowed_updates=['message', 'callback_query'])
+                break
             except TelegramConflictError:
-                logger.warning("⚠️ Обнаружен конфликт, переподключаемся через 5 секунд...")
-                await asyncio.sleep(5)
+                retry_count += 1
+                logger.warning(f"⚠️ Обнаружен конфликт ({retry_count}/{max_retries}), переподключаемся через 10 секунд...")
+                await asyncio.sleep(10)
                 continue
             except Exception as e:
                 logger.error(f"❌ Ошибка polling: {e}")
-                await asyncio.sleep(3)
-                continue
-            break
+                break
         
     except Exception as e:
         logger.critical(f"{Colors.ICONS['critical']} КРИТИЧЕСКАЯ ОШИБКА: {e}", exc_info=True)
     finally:
+        remove_lock()
         logger.info(f"{Colors.ICONS['warning']} Бот остановлен")
         await bot.session.close()
 
@@ -187,3 +237,5 @@ if __name__ == "__main__":
         logger.info(f"{Colors.ICONS['warning']} Бот остановлен пользователем (Ctrl+C)")
     except Exception as e:
         logger.critical(f"{Colors.ICONS['critical']} Непредвиденная ошибка: {e}", exc_info=True)
+    finally:
+        remove_lock()
