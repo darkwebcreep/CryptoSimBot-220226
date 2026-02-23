@@ -3,12 +3,14 @@ import sqlite3
 import json
 import logging
 import threading
+import os
 from datetime import datetime, timedelta
 from functools import lru_cache
 
 logger = logging.getLogger('database')
 
-DB_NAME = 'crypto_sim.db'
+# Для хостинга можно использовать переменную окружения
+DB_NAME = os.getenv('DB_PATH', 'crypto_sim.db')
 _local = threading.local()
 
 def get_connection():
@@ -112,10 +114,11 @@ def init_db():
         execute_query('CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id)')
         
         logger.info("✅ Инициализация БД завершена")
+        return True
         
     except Exception as e:
         logger.error(f"❌ Ошибка при создании таблиц: {e}", exc_info=True)
-        raise
+        return False
 
 # ==================== ПОЛЬЗОВАТЕЛИ ====================
 
@@ -479,8 +482,6 @@ def spin_wheel(user_id, bet_currency='ledoge', bet_amount=10):
 
 # ==================== ТОП ПОЛЬЗОВАТЕЛЕЙ ====================
 
-# database.py (замени существующую функцию get_top_users)
-
 def get_top_users(limit=None):
     """Топ пользователей по балансу LEDOGE (показывает ВСЕХ игроков)"""
     try:
@@ -532,31 +533,21 @@ def get_top_users(limit=None):
                 logger.error(f"❌ Ошибка при обработке пользователя {row[0]}: {e}")
                 continue
         
-        # Сортируем по убыванию LEDOGE (те, у кого больше, будут выше)
+        # Сортируем по убыванию LEDOGE
         users.sort(key=lambda x: x['ledoge'], reverse=True)
         
         # Логируем статистику
         logger.info(f"📊 Всего пользователей в БД: {len(users)}")
         logger.info(f"💰 Пользователей с балансом > 0: {users_with_balance}")
-        logger.info(f"💵 Общий баланс всех пользователей: {total_balance:.2f} LEDOGE")
+        logger.info(f"💵 Общий баланс: {total_balance:.2f} LEDOGE")
         
-        if users:
-            # Покажем топ-3 для примера
-            logger.info("🏆 ТОП-3 ПОЛЬЗОВАТЕЛЕЙ:")
-            for i, u in enumerate(users[:3]):
-                logger.info(f"   {i+1}. {u['first_name']} - {u['ledoge']:.2f} LEDOGE")
-            
-            # Покажем последних 3 (с наименьшим балансом)
-            logger.info("📉 ПОСЛЕДНИЕ 3 ПОЛЬЗОВАТЕЛЯ:")
-            for i, u in enumerate(users[-3:]):
-                logger.info(f"   {len(users)-2+i}. {u['first_name']} - {u['ledoge']:.2f} LEDOGE")
-        
-        # Возвращаем ВСЕХ пользователей без лимита
+        # Возвращаем всех пользователей
         return users
         
     except Exception as e:
         logger.error(f"❌ Ошибка в get_top_users: {e}")
         return []
+
 # ==================== РЕФЕРАЛЫ ====================
 
 def get_referral_stats(user_id):
