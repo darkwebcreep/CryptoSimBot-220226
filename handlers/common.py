@@ -27,6 +27,19 @@ async def cmd_start(message: Message):
     user = message.from_user
     user_id = user.id
     
+    # Логируем
+    logger.info(f"👤 /start от пользователя {user_id} (@{user.username})")
+    
+    # ВАЖНО: Всегда получаем/создаем пользователя
+    user_data = get_user(user_id, user.username, user.first_name)
+    
+    if user_data is None:
+        logger.error(f"❌ НЕ УДАЛОСЬ СОЗДАТЬ ПОЛЬЗОВАТЕЛЯ {user_id}")
+        await message.answer("❌ Ошибка создания профиля. Попробуй еще раз.")
+        return
+    
+    logger.info(f"✅ Пользователь {user_id} успешно загружен")
+    
     # Проверяем, есть ли реферальный параметр
     args = message.text.split()
     referrer_id = 0
@@ -36,25 +49,11 @@ async def cmd_start(message: Message):
             referrer_id = int(args[1].replace('ref_', ''))
             if referrer_id == user_id:
                 referrer_id = 0
+            else:
+                from handlers.referral import process_referral
+                await process_referral(user_id, referrer_id)
         except:
             referrer_id = 0
-    
-    # Логируем попытку входа
-    logger.info(f"👤 Пользователь @{user.username or 'no_username'} (ID: {user_id}) запустил бота")
-    
-    # ВАЖНО: Получаем или создаем пользователя
-    user_data = get_user(user_id, user.username, user.first_name, referrer_id)
-    
-    if user_data is None:
-        logger.error(f"❌ Не удалось создать пользователя {user_id}")
-        await message.answer("❌ Ошибка при создании профиля. Попробуй позже.")
-        return
-    
-    # Если есть реферер, обрабатываем реферала (только для новых пользователей)
-    if referrer_id > 0:
-        # Проверяем, что пользователь только что создан (можно по дате регистрации)
-        from handlers.referral import process_referral
-        await process_referral(user_id, referrer_id)
     
     menu = await get_menu_for_user(user_id)
     
@@ -76,7 +75,6 @@ async def cmd_start(message: Message):
     )
     
     await message.answer(welcome_text, reply_markup=menu)
-
 @router.message(F.text == "💰 Криптокошелёк")
 async def show_wallet(message: Message):
     user_id = message.from_user.id
