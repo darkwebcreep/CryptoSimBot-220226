@@ -612,3 +612,19 @@ async def back_to_main(message: Message):
         await message.answer("🔧 Админ-меню:", reply_markup=admin_keyboard())
     else:
         await message.answer("Главное меню:", reply_markup=main_menu())
+
+async def clean_old_mining_records():
+    """Очищает старые записи о майнинге"""
+    from datetime import datetime, timedelta
+    global last_mining_time
+    
+    while True:
+        await asyncio.sleep(3600)  # Каждый час
+        now = datetime.now()
+        to_delete = []
+        for user_id, last_time in last_mining_time.items():
+            if now - last_time > timedelta(minutes=5):
+                to_delete.append(user_id)
+        for user_id in to_delete:
+            del last_mining_time[user_id]
+        logger.info(f"🧹 Очищено {len(to_delete)} старых записей майнинга")
