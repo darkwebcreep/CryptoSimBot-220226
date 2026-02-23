@@ -17,7 +17,7 @@ from config import BOT_TOKEN, ADMIN_ID
 from database import init_db
 from handlers import common, mining, shop, admin, exchange, skinshop, referral, price_watch
 from handlers.volatility import update_prices
-from middlewares import ThrottlingMiddleware
+from middlewares import ThrottlingMiddleware, AuthMiddleware, LoggingMiddleware
 
 # ==================== ФАЙЛ БЛОКИРОВКИ ====================
 LOCK_FILE = "bot.lock"
@@ -28,7 +28,6 @@ def check_lock():
         try:
             with open(LOCK_FILE, 'r') as f:
                 pid = f.read().strip()
-            # Проверяем, существует ли процесс с таким PID
             if os.name == 'nt':  # Windows
                 import subprocess
                 result = subprocess.run(f'tasklist /FI "PID eq {pid}"', capture_output=True, text=True)
@@ -45,7 +44,6 @@ def check_lock():
         except:
             pass
     
-    # Создаем новый lock-файл
     with open(LOCK_FILE, 'w') as f:
         f.write(str(os.getpid()))
     print(f"✅ Lock-файл создан с PID {os.getpid()}")
@@ -114,7 +112,6 @@ class ColoredFormatter(logging.Formatter):
         formatter = logging.Formatter(log_fmt, datefmt='%H:%M:%S')
         return formatter.format(record)
 
-# Настройка корневого логгера
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -140,7 +137,6 @@ logging.getLogger('aiohttp').setLevel(logging.WARNING)
 # ==================== ЗАПУСК ====================
 
 async def main():
-    # Проверяем блокировку
     if not check_lock():
         logger.error("❌ Бот уже запущен! Завершаем работу.")
         sys.exit(1)
@@ -163,8 +159,13 @@ async def main():
         bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
         dp = Dispatcher(storage=storage)
         
+        # ========== ПОДКЛЮЧАЕМ MIDDLEWARE В ПРАВИЛЬНОМ ПОРЯДКЕ ==========
         dp.message.middleware(ThrottlingMiddleware(0.3))
+        dp.message.middleware(AuthMiddleware())  # Сначала авторизация
+        dp.message.middleware(LoggingMiddleware())
+        
         dp.callback_query.middleware(ThrottlingMiddleware(0.3))
+        dp.callback_query.middleware(AuthMiddleware())
         
         logger.info(f"{Colors.ICONS['info']} Регистрация хендлеров...")
         routers = [
@@ -190,7 +191,6 @@ async def main():
         asyncio.create_task(update_prices())
         logger.info(f"{Colors.ICONS['success']} Фоновая задача волатильности запущена")
         
-        # Запускаем фоновую задачу для очистки майнинга
         from handlers.mining import clean_old_mining_records
         asyncio.create_task(clean_old_mining_records())
         logger.info(f"{Colors.ICONS['success']} Фоновая задача очистки майнинга запущена")
@@ -201,11 +201,9 @@ async def main():
 ╚══════════════════════════════════════════════════════════╝
 """ + Colors.END)
         
-        # Задержка перед запуском
         logger.info("⏳ Ожидание 5 секунд перед запуском...")
         await asyncio.sleep(5)
         
-        # Основной цикл с обработкой ошибок
         retry_count = 0
         max_retries = 5
         
