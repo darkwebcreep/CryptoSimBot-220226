@@ -47,16 +47,20 @@ async def cmd_start(message: Message):
     else:
         new_balance = old_balance
     
-    # Получаем инфу о том, был ли перезапуск
+    # Проверяем флаг перезагрузки
     is_after_reset = False
     try:
-        # Проверяем, есть ли запись о перезапуске в базе
         from database import execute_query
-        reset_flag = execute_query('SELECT value FROM settings WHERE key = "reset_occurred"', fetch_one=True)
-        if reset_flag and reset_flag[0] == 'true':
-            is_after_reset = True
-            # Удаляем флаг после прочтения
-            execute_query('UPDATE settings SET value = "false" WHERE key = "reset_occurred"')
+        # Проверяем существование таблицы settings
+        try:
+            reset_flag = execute_query('SELECT value FROM settings WHERE key = "reset_occurred"', fetch_one=True)
+            if reset_flag and reset_flag[0] == 'true':
+                is_after_reset = True
+                # Удаляем флаг после прочтения
+                execute_query('UPDATE settings SET value = "false" WHERE key = "reset_occurred"')
+        except:
+            # Таблицы settings нет - игнорируем
+            pass
     except:
         pass
     
@@ -95,6 +99,20 @@ async def cmd_start(message: Message):
             f"👋 С возвращением, {user.first_name}!\n\n"
             f"💰 Твой баланс: {new_balance:.2f} LEDOGE"
         )
+    
+    # Проверяем реферальный параметр
+    args = message.text.split()
+    if len(args) > 1 and args[1].startswith('ref_'):
+        try:
+            referrer_id = int(args[1].replace('ref_', ''))
+            if referrer_id != user_id and referrer_id > 0:
+                from handlers.referral import process_referral
+                await process_referral(user_id, referrer_id)
+        except:
+            pass
+    
+    menu = await get_menu_for_user(user_id)
+    await message.answer(welcome_text, reply_markup=menu)
     
     # Проверяем реферальный параметр
     args = message.text.split()
