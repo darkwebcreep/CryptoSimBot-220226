@@ -1,6 +1,5 @@
 # keyboards.py
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
-from config import SKINS
 
 def main_menu():
     kb = [
@@ -107,6 +106,7 @@ def admin_keyboard():
         [KeyboardButton(text="📊 Статистика бота")],
         [KeyboardButton(text="👤 Режим пользователя")],
         [KeyboardButton(text="👑 Особый скин")],
+        [KeyboardButton(text="📢 8 Марта")],
         [KeyboardButton(text="◀ Назад в меню")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
