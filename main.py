@@ -276,3 +276,68 @@ def give_bonus_to_all():
 
 # Вызываем функцию сразу после инициализации БД
 give_bonus_to_all()
+
+@router.message(F.text == "🔄 Перезагрузка")
+async def announce_reset(message: Message):
+    """Объявляет о перезагрузке вселенной и раздает бонусы"""
+    if message.from_user.id != ADMIN_ID:
+        return
+    
+    await message.answer("🔄 Начинаю процедуру перезагрузки вселенной...")
+    
+    try:
+        import sqlite3
+        import json
+        
+        conn = sqlite3.connect('/data/crypto_sim.db')
+        cur = conn.cursor()
+        
+        # Создаем таблицу настроек, если её нет
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        ''')
+        
+        # Устанавливаем флаг перезагрузки
+        cur.execute('''
+            INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)
+        ''', ('reset_occurred', 'true'))
+        
+        # Получаем всех пользователей
+        cur.execute('SELECT user_id FROM users')
+        users = cur.fetchall()
+        
+        bonus_count = 0
+        for user in users:
+            user_id = user[0]
+            
+            # Получаем текущий баланс
+            cur.execute('SELECT balances FROM balances WHERE user_id = ?', (user_id,))
+            result = cur.fetchone()
+            
+            if result and result[0]:
+                balances = json.loads(result[0])
+            else:
+                balances = {}
+            
+            # Добавляем 1000 LEDOGE
+            balances['ledoge'] = balances.get('ledoge', 0) + 1000
+            bonus_count += 1
+            
+            # Сохраняем
+            cur.execute('UPDATE balances SET balances = ? WHERE user_id = ?', 
+                       (json.dumps(balances), user_id))
+        
+        conn.commit()
+        conn.close()
+        
+        await message.answer(
+            f"✅ **ПЕРЕЗАГРУЗКА ЗАВЕРШЕНА!**\n\n"
+            f"📢 Объявление о перезагрузке будет показано всем игрокам при следующем входе.\n"
+            f"💰 Бонус 1000 LEDOGE начислен {bonus_count} пользователям!"
+        )
+        
+    except Exception as e:
+        await message.answer(f"❌ Ошибка: {e}")
