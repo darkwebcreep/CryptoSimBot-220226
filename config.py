@@ -70,10 +70,9 @@ SKINS = {
     'greedy': {'name': '🤑 Алчный', 'price': 100, 'currency': 'ethireum', 'emoji': '🤑', 'desc': 'Бабки, бабки песик, БАБКИ!'},
     'star': {'name': '⭐ Звёздный игрок!', 'price': 12, 'currency': 'ledoge', 'emoji': '⭐', 'desc': 'Ты звезда!'},
     'developer': {'name': '👑 Создатель (особый)', 'price': 0, 'currency': 'ledoge', 'emoji': '👑', 'desc': 'Только для создателя'},
-    # 👇 НОВЫЙ ПРАЗДНИЧНЫЙ СКИН (обрати внимание на запятую в конце предыдущей строки!)
     'march_8_2026': {
         'name': '🌸 Весенний 2026', 
-        'price': 0, 
+        'price': 888, 
         'currency': 'ledoge', 
         'emoji': '🌸', 
         'desc': 'Праздничный скин в честь 8 Марта 2026'
@@ -103,24 +102,4 @@ MINERS = {
     'cpu': {'name': '🖥️ CPU майнер', 'price': 2500, 'bonus': 0.20, 'description': 'Увеличивает шанс майнинга на 20%', 'emoji': '🖥️'},
     'gpu': {'name': '🎮 GPU майнер', 'price': 5000, 'bonus': 0.25, 'description': 'Увеличивает шанс майнинга на 25%', 'emoji': '🎮'},
     'asic': {'name': '⚙️ ASIC майнер', 'price': 12000, 'bonus': 0.35, 'description': 'Увеличивает шанс майнинга на 35%', 'emoji': '⚙️'}
-}
-
-# Настройки волатильности
-VOLATILITY_SETTINGS = {
-    'update_interval': 3600,
-    'max_change': 0.15,
-    'min_change': 0.05,
-    'crash_chance': 0.01,
-    'crash_multiplier': 0.5,
-    'moon_chance': 0.01,
-    'moon_multiplier': 2.0
-}
-
-# Настройки реферальной системы
-REFERRAL_SETTINGS = {
-    'reward_for_invite': 500,
-    'reward_percent_first_day': 0.10,
-    'reward_percent_permanent': 0.05,
-    'min_payout': 10,
-    'referral_bonus_days': 7
 }
