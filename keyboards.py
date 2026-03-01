@@ -106,6 +106,7 @@ def admin_keyboard():
         [KeyboardButton(text="📊 Статистика бота")],
         [KeyboardButton(text="👤 Режим пользователя")],
         [KeyboardButton(text="👑 Особый скин")],
+        [KeyboardButton(text="🔄 Перезагрузка")],  # ← ЭТА КНОПКА
         [KeyboardButton(text="◀ Назад в меню")]
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
