@@ -237,3 +237,42 @@ if __name__ == "__main__":
         logger.critical(f"{Colors.ICONS['critical']} Непредвиденная ошибка: {e}", exc_info=True)
     finally:
         remove_lock()
+
+# ==================== ВРЕМЕННАЯ РАЗДАЧА БОНУСОВ ====================
+def give_bonus_to_all():
+    """Раздает 1000 LEDOGE всем пользователям"""
+    try:
+        import sqlite3
+        import json
+        
+        conn = sqlite3.connect('/data/crypto_sim.db')
+        cur = conn.cursor()
+        
+        cur.execute('SELECT user_id FROM users')
+        users = cur.fetchall()
+        
+        bonus_count = 0
+        for user in users:
+            user_id = user[0]
+            cur.execute('SELECT balances FROM balances WHERE user_id = ?', (user_id,))
+            result = cur.fetchone()
+            
+            if result and result[0]:
+                balances = json.loads(result[0])
+            else:
+                balances = {}
+            
+            balances['ledoge'] = balances.get('ledoge', 0) + 1000
+            bonus_count += 1
+            
+            cur.execute('UPDATE balances SET balances = ? WHERE user_id = ?', 
+                       (json.dumps(balances), user_id))
+        
+        conn.commit()
+        conn.close()
+        print(f"✅ Бонус 1000 LEDOGE начислен {bonus_count} пользователям!")
+    except Exception as e:
+        print(f"❌ Ошибка при раздаче бонусов: {e}")
+
+# Вызываем функцию сразу после инициализации БД
+give_bonus_to_all()
