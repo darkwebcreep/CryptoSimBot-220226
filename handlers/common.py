@@ -1,5 +1,6 @@
 # handlers/common.py
 import logging
+import sqlite3  # ← ЭТОЙ СТРОКИ НЕ ХВАТАЛО!
 from aiogram import Router, F
 from aiogram.types import Message
 from aiogram.filters import Command
@@ -47,6 +48,7 @@ async def cmd_start(message: Message):
     # Проверяем флаг перезагрузки
     is_after_reset = False
     try:
+        # ИСПОЛЬЗУЕМ ПРЯМОЕ ПОДКЛЮЧЕНИЕ
         conn = sqlite3.connect('/data/crypto_sim.db')
         cur = conn.cursor()
         cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'")
@@ -88,33 +90,5 @@ async def cmd_start(message: Message):
     # Получаем меню
     menu = await get_menu_for_user(user_id)
     
-    # ОТПРАВЛЯЕМ ТОЛЬКО ОДНО СООБЩЕНИЕ!
-    await message.answer(welcome_text, reply_markup=menu)
-    
-    # Проверяем реферальный параметр
-    args = message.text.split()
-    if len(args) > 1 and args[1].startswith('ref_'):
-        try:
-            referrer_id = int(args[1].replace('ref_', ''))
-            if referrer_id != user_id and referrer_id > 0:
-                from handlers.referral import process_referral
-                await process_referral(user_id, referrer_id)
-        except:
-            pass
-    
-    menu = await get_menu_for_user(user_id)
-    await message.answer(welcome_text, reply_markup=menu)
-    
-    # Проверяем реферальный параметр
-    args = message.text.split()
-    if len(args) > 1 and args[1].startswith('ref_'):
-        try:
-            referrer_id = int(args[1].replace('ref_', ''))
-            if referrer_id != user_id and referrer_id > 0:
-                from handlers.referral import process_referral
-                await process_referral(user_id, referrer_id)
-        except:
-            pass
-    
-    menu = await get_menu_for_user(user_id)
+    # Отправляем одно сообщение
     await message.answer(welcome_text, reply_markup=menu)
