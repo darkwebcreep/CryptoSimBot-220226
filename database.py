@@ -9,8 +9,12 @@ from functools import lru_cache
 
 logger = logging.getLogger('database')
 
-# Для хостинга можно использовать переменную окружения
-DB_NAME = os.getenv('DB_PATH', 'crypto_sim.db')
+# Путь к базе данных
+if os.path.exists('/data/'):
+    DB_NAME = '/data/crypto_sim.db'
+else:
+    DB_NAME = 'crypto_sim.db'
+
 _local = threading.local()
 
 def get_connection():
@@ -48,8 +52,11 @@ def execute_query(query, params=(), fetch_one=False, fetch_all=False):
 def init_db():
     """Создаёт таблицы при первом запуске"""
     try:
+        conn = get_connection()
+        cur = conn.cursor()  # ← ЭТО БЫЛО ПРОПУЩЕНО!
+        
         # Таблица пользователей
-        execute_query('''
+        cur.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY,
                 username TEXT,
@@ -68,16 +75,16 @@ def init_db():
             )
         ''')
         
-        # Таблица с балансами
-        execute_query('''
+        # Таблица балансов
+        cur.execute('''
             CREATE TABLE IF NOT EXISTS balances (
                 user_id INTEGER PRIMARY KEY,
                 balances TEXT DEFAULT '{}'
             )
         ''')
         
-        # Таблица с майнерами
-        execute_query('''
+        # Таблица майнеров
+        cur.execute('''
             CREATE TABLE IF NOT EXISTS miners (
                 user_id INTEGER,
                 miner_type TEXT,
@@ -87,7 +94,7 @@ def init_db():
         ''')
         
         # Таблица рефералов
-        execute_query('''
+        cur.execute('''
             CREATE TABLE IF NOT EXISTS referrals (
                 referrer_id INTEGER,
                 referral_id INTEGER,
@@ -97,8 +104,8 @@ def init_db():
             )
         ''')
         
-        # Таблица для истории цен
-        execute_query('''
+        # Таблица истории цен
+        cur.execute('''
             CREATE TABLE IF NOT EXISTS price_history (
                 currency TEXT,
                 price REAL,
@@ -107,7 +114,7 @@ def init_db():
             )
         ''')
         
-                # Таблица настроек (для флагов и т.д.)
+        # Таблица настроек (ДЛЯ ФЛАГА ПЕРЕЗАГРУЗКИ)
         cur.execute('''
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
@@ -115,12 +122,11 @@ def init_db():
             )
         ''')
         
-        cur.execute('''
-                    CREATE TABLE IF NOT EXISTS settings (
-                        key TEXT PRIMARY KEY,
-                        value TEXT
-            )
-        ''')
+        # Индексы
+        cur.execute('CREATE INDEX IF NOT EXISTS idx_users_id ON users(user_id)')
+        cur.execute('CREATE INDEX IF NOT EXISTS idx_balances_user ON balances(user_id)')
+        cur.execute('CREATE INDEX IF NOT EXISTS idx_miners_user ON miners(user_id)')
+        cur.execute('CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id)')
         
         conn.commit()
         conn.close()
@@ -129,19 +135,6 @@ def init_db():
         
     except Exception as e:
         logger.error(f"❌ Ошибка при создании таблиц: {e}")
-        return False
-        
-        # Индексы
-        execute_query('CREATE INDEX IF NOT EXISTS idx_users_id ON users(user_id)')
-        execute_query('CREATE INDEX IF NOT EXISTS idx_balances_user ON balances(user_id)')
-        execute_query('CREATE INDEX IF NOT EXISTS idx_miners_user ON miners(user_id)')
-        execute_query('CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id)')
-        
-        logger.info("✅ Инициализация БД завершена")
-        return True
-        
-    except Exception as e:
-        logger.error(f"❌ Ошибка при создании таблиц: {e}", exc_info=True)
         return False
 
 # ==================== ПОЛЬЗОВАТЕЛИ ====================
