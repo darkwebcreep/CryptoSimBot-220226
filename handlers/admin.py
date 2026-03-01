@@ -218,3 +218,69 @@ async def give_dev_skin(message: Message):
     await message.answer(
         "👑 <b>Особый скин активирован!</b>\n\n"
     )
+
+# Добавь эти функции в конец файла handlers/admin.py
+
+@router.message(F.text == "💰 Начислить бонус")
+async def give_bonus_to_all(message: Message):
+    """Начисляет стартовый бонус всем пользователям с нулевым балансом"""
+    if not await is_admin(message):
+        return
+    
+    await message.answer("💰 Начисляю бонус 1000 LEDOGE всем пользователям...")
+    
+    import sqlite3
+    conn = sqlite3.connect('/data/crypto_sim.db')
+    cur = conn.cursor()
+    cur.execute('SELECT user_id FROM users')
+    users = cur.fetchall()
+    conn.close()
+    
+    count = 0
+    for user in users:
+        user_id = user[0]
+        balance = get_balance(user_id, 'ledoge')
+        if balance == 0:
+            update_balance(user_id, 'ledoge', 1000, 'add')
+            count += 1
+    
+    await message.answer(f"✅ Бонус начислен {count} пользователям!")
+
+@router.message(F.text == "📢 Праздничная рассылка")
+async def holiday_broadcast(message: Message):
+    """Отправляет праздничное сообщение всем пользователям"""
+    if not await is_admin(message):
+        return
+    
+    await message.answer("🌸 Отправляю праздничные поздравления...")
+    
+    import sqlite3
+    import asyncio
+    
+    conn = sqlite3.connect('/data/crypto_sim.db')
+    cur = conn.cursor()
+    cur.execute('SELECT user_id FROM users')
+    users = cur.fetchall()
+    conn.close()
+    
+    text = (
+        "🌸🌷🌸 **С 8 МАРТА!** 🌸🌷🌸\n\n"
+        "Дорогие игроки! Поздравляем вас с праздником весны!\n\n"
+        "🎁 **ВСЕМ ПОДАРКИ:**\n"
+        "✅ 888 LEDOGE\n"
+        "✅ Бустер x2 на 24ч\n"
+        "✅ Праздничный скин\n\n"
+        "👇 Забирай бонус прямо сейчас!\n"
+        "Просто напиши /start"
+    )
+    
+    sent = 0
+    for user in users:
+        try:
+            await message.bot.send_message(user[0], text)
+            sent += 1
+            await asyncio.sleep(0.05)
+        except:
+            pass
+    
+    await message.answer(f"✅ Рассылка отправлена {sent} пользователям!")
