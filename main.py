@@ -17,27 +17,24 @@ from config import BOT_TOKEN, ADMIN_ID
 from database import init_db
 from handlers import common, mining, shop, admin, exchange, skinshop, referral, price_watch
 from handlers.volatility import update_prices
-from middlewares import ThrottlingMiddleware, AuthMiddleware, LoggingMiddleware
+from middlewares import ThrottlingMiddleware
 
 # ==================== ФАЙЛ БЛОКИРОВКИ ====================
 LOCK_FILE = "bot.lock"
 
 def check_lock():
-    """Проверяет, не запущен ли уже бот"""
     if os.path.exists(LOCK_FILE):
         try:
             with open(LOCK_FILE, 'r') as f:
                 pid = f.read().strip()
-            if os.name == 'nt':  # Windows
+            if os.name == 'nt':
                 import subprocess
                 result = subprocess.run(f'tasklist /FI "PID eq {pid}"', capture_output=True, text=True)
                 if str(pid) in result.stdout:
-                    print(f"❌ Бот уже запущен с PID {pid}")
                     return False
-            else:  # Linux/Mac
+            else:
                 try:
                     os.kill(int(pid), 0)
-                    print(f"❌ Бот уже запущен с PID {pid}")
                     return False
                 except:
                     pass
@@ -46,32 +43,25 @@ def check_lock():
     
     with open(LOCK_FILE, 'w') as f:
         f.write(str(os.getpid()))
-    print(f"✅ Lock-файл создан с PID {os.getpid()}")
     return True
 
 def remove_lock():
-    """Удаляет файл-блокировку"""
     try:
         if os.path.exists(LOCK_FILE):
             os.remove(LOCK_FILE)
-            print("✅ Lock-файл удален")
     except:
         pass
 
-# ==================== ОБРАБОТКА СИГНАЛОВ ====================
 def signal_handler(sig, frame):
-    print(f"\n🛑 Получен сигнал {sig}, завершаем работу...")
     remove_lock()
     sys.exit(0)
 
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
-# ==================== СОЗДАЕМ ПАПКУ ДЛЯ ЛОГОВ ====================
+# ==================== ЛОГИ ====================
 LOG_DIR = Path("logs")
 LOG_DIR.mkdir(exist_ok=True)
-
-# ==================== НАСТРОЙКА КРАСИВОГО ЛОГИРОВАНИЯ ====================
 
 class Colors:
     HEADER = '\033[95m'
@@ -138,7 +128,7 @@ logging.getLogger('aiohttp').setLevel(logging.WARNING)
 
 async def main():
     if not check_lock():
-        logger.error("❌ Бот уже запущен! Завершаем работу.")
+        logger.error("❌ Бот уже запущен!")
         sys.exit(1)
     
     try:
@@ -159,13 +149,8 @@ async def main():
         bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
         dp = Dispatcher(storage=storage)
         
-        # ========== ПОДКЛЮЧАЕМ MIDDLEWARE В ПРАВИЛЬНОМ ПОРЯДКЕ ==========
         dp.message.middleware(ThrottlingMiddleware(0.3))
-        dp.message.middleware(AuthMiddleware())  # Сначала авторизация
-        dp.message.middleware(LoggingMiddleware())
-        
         dp.callback_query.middleware(ThrottlingMiddleware(0.3))
-        dp.callback_query.middleware(AuthMiddleware())
         
         logger.info(f"{Colors.ICONS['info']} Регистрация хендлеров...")
         routers = [
@@ -201,7 +186,7 @@ async def main():
 ╚══════════════════════════════════════════════════════════╝
 """ + Colors.END)
         
-        logger.info("⏳ Ожидание 5 секунд перед запуском...")
+        logger.info("⏳ Ожидание 5 секунд...")
         await asyncio.sleep(5)
         
         retry_count = 0
@@ -214,11 +199,11 @@ async def main():
                 break
             except TelegramConflictError:
                 retry_count += 1
-                logger.warning(f"⚠️ Обнаружен конфликт ({retry_count}/{max_retries}), переподключаемся через 10 секунд...")
+                logger.warning(f"⚠️ Конфликт ({retry_count}/{max_retries}), ждем 10 сек...")
                 await asyncio.sleep(10)
                 continue
             except Exception as e:
-                logger.error(f"❌ Ошибка polling: {e}")
+                logger.error(f"❌ Ошибка: {e}")
                 break
         
     except Exception as e:
@@ -232,112 +217,8 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info(f"{Colors.ICONS['warning']} Бот остановлен пользователем (Ctrl+C)")
+        logger.info(f"{Colors.ICONS['warning']} Бот остановлен пользователем")
     except Exception as e:
         logger.critical(f"{Colors.ICONS['critical']} Непредвиденная ошибка: {e}", exc_info=True)
     finally:
         remove_lock()
-
-# ==================== ВРЕМЕННАЯ РАЗДАЧА БОНУСОВ ====================
-def give_bonus_to_all():
-    """Раздает 1000 LEDOGE всем пользователям"""
-    try:
-        import sqlite3
-        import json
-        
-        conn = sqlite3.connect('/data/crypto_sim.db')
-        cur = conn.cursor()
-        
-        cur.execute('SELECT user_id FROM users')
-        users = cur.fetchall()
-        
-        bonus_count = 0
-        for user in users:
-            user_id = user[0]
-            cur.execute('SELECT balances FROM balances WHERE user_id = ?', (user_id,))
-            result = cur.fetchone()
-            
-            if result and result[0]:
-                balances = json.loads(result[0])
-            else:
-                balances = {}
-            
-            balances['ledoge'] = balances.get('ledoge', 0) + 1000
-            bonus_count += 1
-            
-            cur.execute('UPDATE balances SET balances = ? WHERE user_id = ?', 
-                       (json.dumps(balances), user_id))
-        
-        conn.commit()
-        conn.close()
-        print(f"✅ Бонус 1000 LEDOGE начислен {bonus_count} пользователям!")
-    except Exception as e:
-        print(f"❌ Ошибка при раздаче бонусов: {e}")
-
-# Вызываем функцию сразу после инициализации БД
-give_bonus_to_all()
-
-@router.message(F.text == "🔄 Перезагрузка")
-async def announce_reset(message: Message):
-    """Объявляет о перезагрузке вселенной и раздает бонусы"""
-    if message.from_user.id != ADMIN_ID:
-        return
-    
-    await message.answer("🔄 Начинаю процедуру перезагрузки вселенной...")
-    
-    try:
-        import sqlite3
-        import json
-        
-        conn = sqlite3.connect('/data/crypto_sim.db')
-        cur = conn.cursor()
-        
-        # Создаем таблицу настроек, если её нет
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS settings (
-                key TEXT PRIMARY KEY,
-                value TEXT
-            )
-        ''')
-        
-        # Устанавливаем флаг перезагрузки
-        cur.execute('''
-            INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)
-        ''', ('reset_occurred', 'true'))
-        
-        # Получаем всех пользователей
-        cur.execute('SELECT user_id FROM users')
-        users = cur.fetchall()
-        
-        bonus_count = 0
-        for user in users:
-            user_id = user[0]
-            
-            # Получаем текущий баланс
-            cur.execute('SELECT balances FROM balances WHERE user_id = ?', (user_id,))
-            result = cur.fetchone()
-            
-            if result and result[0]:
-                balances = json.loads(result[0])
-            else:
-                balances = {}
-            
-            # Добавляем 1000 LEDOGE
-            balances['ledoge'] = balances.get('ledoge', 0) + 1000
-            bonus_count += 1
-            
-            # Сохраняем
-            cur.execute('UPDATE balances SET balances = ? WHERE user_id = ?', 
-                       (json.dumps(balances), user_id))
-        
-        conn.commit()
-        conn.close()
-        
-        await message.answer(
-            f"✅ **ПЕРЕЗАГРУЗКА ЗАВЕРШЕНА!**\n\n"
-            f"📢 Объявление о перезагрузке будет показано всем игрокам при следующем входе.\n"
-            f"💰 Бонус 1000 LEDOGE начислен {bonus_count} пользователям!"
-        )
-        
-    except Exception as e:
-        await message.answer(f"❌ Ошибка: {e}")
