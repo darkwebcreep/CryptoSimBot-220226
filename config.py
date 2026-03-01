@@ -14,7 +14,7 @@ logger.info(f"⚙️ Загружена конфигурация: ADMIN_ID={ADMI
 CHANNEL_LINK = "https://t.me/LEDOGEchannel"
 SUPPORT_LINK = "https://t.me/woolfcreep"
 
-# ============= КУРСЫ ВАЛЮТ (СТРОКИ 20-35) =============
+# ============= КУРСЫ ВАЛЮТ =============
 CURRENCY_PRICES = {
     'notcoine': 0.001,
     'shibafloki': 0.002,
@@ -69,14 +69,15 @@ SKINS = {
     'angrybird': {'name': '🐦 Злая птичка', 'price': 1, 'currency': 'solanafast', 'emoji': '🐦', 'desc': 'Я играю в энгри бёрдс'},
     'greedy': {'name': '🤑 Алчный', 'price': 100, 'currency': 'ethireum', 'emoji': '🤑', 'desc': 'Бабки, бабки песик, БАБКИ!'},
     'star': {'name': '⭐ Звёздный игрок!', 'price': 12, 'currency': 'ledoge', 'emoji': '⭐', 'desc': 'Ты звезда!'},
-    'developer': {'name': '👑 Создатель (особый)', 'price': 0, 'currency': 'ledoge', 'emoji': '👑', 'desc': 'Только для создателя'}
+    'developer': {'name': '👑 Создатель (особый)', 'price': 0, 'currency': 'ledoge', 'emoji': '👑', 'desc': 'Только для создателя'},
+    # 👇 НОВЫЙ ПРАЗДНИЧНЫЙ СКИН (обрати внимание на запятую в конце предыдущей строки!)
     'march_8_2026': {
         'name': '🌸 Весенний 2026', 
         'price': 0, 
         'currency': 'ledoge', 
         'emoji': '🌸', 
         'desc': 'Праздничный скин в честь 8 Марта 2026'
-},
+    }
 }
 
 # Бустеры
@@ -103,8 +104,6 @@ MINERS = {
     'gpu': {'name': '🎮 GPU майнер', 'price': 5000, 'bonus': 0.25, 'description': 'Увеличивает шанс майнинга на 25%', 'emoji': '🎮'},
     'asic': {'name': '⚙️ ASIC майнер', 'price': 12000, 'bonus': 0.35, 'description': 'Увеличивает шанс майнинга на 35%', 'emoji': '⚙️'}
 }
-
-# ============= НОВЫЕ НАСТРОЙКИ =============
 
 # Настройки волатильности
 VOLATILITY_SETTINGS = {
