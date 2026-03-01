@@ -318,3 +318,15 @@ async def back_to_main(message: Message):
         await message.answer("🔧 Админ-меню:", reply_markup=admin_keyboard())
     else:
         await message.answer("Главное меню:", reply_markup=main_menu())
+
+# В handlers/skinshop.py добавь эту функцию (в любое место)
+
+async def give_holiday_skin(user_id):
+    """Выдает праздничный скин пользователю (если еще нет)"""
+    from database import get_user_owned_skins, add_skin_to_wardrobe
+    
+    owned = get_user_owned_skins(user_id)
+    if 'march_8_2026' not in owned:
+        add_skin_to_wardrobe(user_id, 'march_8_2026')
+        return True
+    return False
