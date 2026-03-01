@@ -96,14 +96,6 @@ def init_db():
                 PRIMARY KEY (referrer_id, referral_id)
             )
         ''')
-
-                # Таблица настроек (для флагов и т.д.)
-        cur.execute('''
-            CREATE TABLE IF NOT EXISTS settings (
-                key TEXT PRIMARY KEY,
-                value TEXT
-            )
-        ''')
         
         # Таблица для истории цен
         execute_query('''
@@ -114,6 +106,30 @@ def init_db():
                 PRIMARY KEY (currency, timestamp)
             )
         ''')
+        
+                # Таблица настроек (для флагов и т.д.)
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        ''')
+        
+        cur.execute('''
+                    CREATE TABLE IF NOT EXISTS settings (
+                        key TEXT PRIMARY KEY,
+                        value TEXT
+            )
+        ''')
+        
+        conn.commit()
+        conn.close()
+        logger.info("✅ Инициализация БД завершена")
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка при создании таблиц: {e}")
+        return False
         
         # Индексы
         execute_query('CREATE INDEX IF NOT EXISTS idx_users_id ON users(user_id)')
