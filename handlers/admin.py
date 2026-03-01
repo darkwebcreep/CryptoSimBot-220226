@@ -107,7 +107,7 @@ async def process_broadcast(message: Message, state: FSMContext):
     
     broadcast_text = message.text
     
-    conn = sqlite3.connect('crypto_sim.db')
+    conn = sqlite3.connect('/data/crypto_sim.db')
     cur = conn.cursor()
     cur.execute('SELECT user_id FROM users')
     users = cur.fetchall()
@@ -121,7 +121,7 @@ async def process_broadcast(message: Message, state: FSMContext):
     await status_msg.edit_text(
         f"✅ <b>Рассылка завершена!</b>\n\n"
         f"Всего пользователей: {len(users)}\n"
-        f"Текст: {broadcast_text[:100]}..." + ("..." if len(broadcast_text) > 100 else "")
+        f"Текст: {broadcast_text[:100]}..."
     )
     
     await state.clear()
@@ -131,7 +131,7 @@ async def bot_stats(message: Message):
     if not await is_admin(message):
         return
     
-    conn = sqlite3.connect('crypto_sim.db')
+    conn = sqlite3.connect('/data/crypto_sim.db')
     cur = conn.cursor()
     
     cur.execute('SELECT COUNT(*) FROM users')
@@ -146,28 +146,15 @@ async def bot_stats(message: Message):
     cur.execute('SELECT SUM(wheel_wins) FROM users')
     total_wins = cur.fetchone()[0] or 0
     
-    cur.execute('SELECT skin, COUNT(*) FROM users WHERE skin != "none" GROUP BY skin')
-    skin_stats = cur.fetchall()
-    
     conn.close()
     
     text = (
         f"📊 <b>Статистика бота</b>\n\n"
         f"👥 Всего пользователей: {total_users}\n"
-        f"🎲 Игроков (крутили колесо): {active_users}\n"
+        f"🎲 Активных: {active_users}\n"
         f"🔄 Всего спинов: {total_spins}\n"
         f"🏆 Всего выигрышей: {total_wins}\n"
     )
-    
-    if total_spins > 0:
-        text += f"📈 Процент побед: {total_wins/total_spins*100:.1f}%\n"
-    
-    if skin_stats:
-        text += "\n👕 <b>Скины:</b>\n"
-        for skin, count in skin_stats:
-            from config import SKINS
-            skin_name = SKINS.get(skin, {}).get('name', skin)
-            text += f"  {skin_name}: {count} чел.\n"
     
     await message.answer(text)
 
@@ -179,7 +166,6 @@ async def switch_to_user_mode(message: Message):
     from keyboards import main_menu
     await message.answer(
         "👤 <b>Режим обычного пользователя</b>\n\n"
-        "Теперь ты видишь меню как обычный игрок.\n"
         "Чтобы вернуться в админку, напиши /admin",
         reply_markup=main_menu()
     )
@@ -191,16 +177,13 @@ async def give_dev_skin(message: Message):
     
     user_id = message.from_user.id
     
-    conn = sqlite3.connect('crypto_sim.db')
+    conn = sqlite3.connect('/data/crypto_sim.db')
     cur = conn.cursor()
     cur.execute('UPDATE users SET skin = ? WHERE user_id = ?', ('developer', user_id))
     conn.commit()
     conn.close()
     
-    await message.answer(
-        "👑 <b>Особый скин активирован!</b>\n\n"
-        "Теперь в топе ты будешь отображаться с особенным пёсиком! 🐕‍🦺"
-    )
+    await message.answer("👑 Особый скин активирован!")
 
 # ========== НОВАЯ ФУНКЦИЯ ДЛЯ ПЕРЕЗАГРУЗКИ ==========
 @router.message(F.text == "🔄 Перезагрузка")
@@ -212,9 +195,6 @@ async def announce_reset(message: Message):
     await message.answer("🔄 Начинаю процедуру перезагрузки вселенной...")
     
     try:
-        import sqlite3
-        import json
-        
         conn = sqlite3.connect('/data/crypto_sim.db')
         cur = conn.cursor()
         
@@ -239,7 +219,6 @@ async def announce_reset(message: Message):
         for user in users:
             user_id = user[0]
             
-            # Получаем текущий баланс
             cur.execute('SELECT balances FROM balances WHERE user_id = ?', (user_id,))
             result = cur.fetchone()
             
@@ -248,11 +227,9 @@ async def announce_reset(message: Message):
             else:
                 balances = {}
             
-            # Добавляем 1000 LEDOGE
             balances['ledoge'] = balances.get('ledoge', 0) + 1000
             bonus_count += 1
             
-            # Сохраняем
             cur.execute('UPDATE balances SET balances = ? WHERE user_id = ?', 
                        (json.dumps(balances), user_id))
         
@@ -261,11 +238,9 @@ async def announce_reset(message: Message):
         
         await message.answer(
             f"✅ **ПЕРЕЗАГРУЗКА ЗАВЕРШЕНА!**\n\n"
-            f"📢 Объявление о перезагрузке будет показано всем игрокам при следующем входе.\n"
+            f"📢 Объявление будет показано при следующем входе.\n"
             f"💰 Бонус 1000 LEDOGE начислен {bonus_count} пользователям!"
         )
         
     except Exception as e:
         await message.answer(f"❌ Ошибка: {e}")
-
-# ========== КОНЕЦ НОВОЙ ФУНКЦИИ ==========
