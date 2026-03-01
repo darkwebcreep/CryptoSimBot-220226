@@ -29,10 +29,13 @@ async def cmd_start(message: Message):
     
     logger.info(f"👤 /start от пользователя {user_id}")
     
+    # Получаем или создаем пользователя
     user_data = get_user(user_id, user.username, user.first_name)
     
+    # Получаем баланс
     old_balance = get_balance(user_id, 'ledoge')
     
+    # Начисляем бонус если надо
     bonus_given = False
     if old_balance == 0:
         update_balance(user_id, 'ledoge', 1000, 'add')
@@ -55,9 +58,10 @@ async def cmd_start(message: Message):
                 cur.execute('UPDATE settings SET value = "false" WHERE key = "reset_occurred"')
                 conn.commit()
         conn.close()
-    except:
-        pass
+    except Exception as e:
+        logger.error(f"Ошибка при проверке флага: {e}")
     
+    # Формируем приветствие
     if is_after_reset and bonus_given:
         welcome_text = (
             f"🔄 **ПЕРЕЗАГРУЗКА ВСЕЛЕННОЙ!** 🔄\n\n"
@@ -72,7 +76,8 @@ async def cmd_start(message: Message):
         welcome_text = (
             f"👋 Привет, {user.first_name}!\n\n"
             f"🎁 **СТАРТОВЫЙ БОНУС:** 1000 LEDOGE\n\n"
-            f"💰 Твой баланс: {new_balance:.2f} LEDOGE"
+            f"💰 Твой баланс: {new_balance:.2f} LEDOGE\n\n"
+            f"Добро пожаловать в CryptoSim!"
         )
     else:
         welcome_text = (
@@ -80,7 +85,10 @@ async def cmd_start(message: Message):
             f"💰 Твой баланс: {new_balance:.2f} LEDOGE"
         )
     
+    # Получаем меню
     menu = await get_menu_for_user(user_id)
+    
+    # ОТПРАВЛЯЕМ ТОЛЬКО ОДНО СООБЩЕНИЕ!
     await message.answer(welcome_text, reply_markup=menu)
     
     # Проверяем реферальный параметр
