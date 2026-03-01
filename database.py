@@ -96,6 +96,14 @@ def init_db():
                 PRIMARY KEY (referrer_id, referral_id)
             )
         ''')
+
+                # Таблица настроек (для флагов и т.д.)
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        ''')
         
         # Таблица для истории цен
         execute_query('''
