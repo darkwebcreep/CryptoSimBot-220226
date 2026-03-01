@@ -27,22 +27,16 @@ async def cmd_start(message: Message):
     user = message.from_user
     user_id = user.id
     
-    # Логируем
-    logger.info(f"👤 /start от пользователя {user_id} (@{user.username})")
+    logger.info(f"👤 /start от пользователя {user_id}")
     
-    # Получаем или создаем пользователя
     user_data = get_user(user_id, user.username, user.first_name)
     
-    # Получаем баланс ДО начисления
     old_balance = get_balance(user_id, 'ledoge')
     
-    # ПРОВЕРЯЕМ И НАЧИСЛЯЕМ БОНУС
     bonus_given = False
     if old_balance == 0:
-        # Начисляем стартовый бонус 1000 LEDOGE
         update_balance(user_id, 'ledoge', 1000, 'add')
         new_balance = get_balance(user_id, 'ledoge')
-        logger.info(f"💰 Начислен стартовый бонус 1000 LEDOGE пользователю {user_id}")
         bonus_given = True
     else:
         new_balance = old_balance
@@ -50,55 +44,44 @@ async def cmd_start(message: Message):
     # Проверяем флаг перезагрузки
     is_after_reset = False
     try:
-        from database import execute_query
-        # Проверяем существование таблицы settings
-        try:
-            reset_flag = execute_query('SELECT value FROM settings WHERE key = "reset_occurred"', fetch_one=True)
+        conn = sqlite3.connect('/data/crypto_sim.db')
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'")
+        if cur.fetchone():
+            cur.execute('SELECT value FROM settings WHERE key = "reset_occurred"')
+            reset_flag = cur.fetchone()
             if reset_flag and reset_flag[0] == 'true':
                 is_after_reset = True
-                # Удаляем флаг после прочтения
-                execute_query('UPDATE settings SET value = "false" WHERE key = "reset_occurred"')
-        except:
-            # Таблицы settings нет - игнорируем
-            pass
+                cur.execute('UPDATE settings SET value = "false" WHERE key = "reset_occurred"')
+                conn.commit()
+        conn.close()
     except:
         pass
     
-    # Формируем приветствие
     if is_after_reset and bonus_given:
         welcome_text = (
-            f"🔄 **ВНИМАНИЕ! ПЕРЕЗАГРУЗКА ВСЕЛЕННОЙ!** 🔄\n\n"
+            f"🔄 **ПЕРЕЗАГРУЗКА ВСЕЛЕННОЙ!** 🔄\n\n"
             f"👋 Привет, {user.first_name}!\n\n"
-            f"🌌 Крипто-вселенная LEDOGE прошла хард-форк и обновилась!\n\n"
+            f"🌌 Крипто-вселенная LEDOGE обновилась!\n\n"
             f"🎁 **ТЫ ПОЛУЧИЛ:**\n"
-            f"✅ 1000 LEDOGE (стартовый бонус)\n"
-            f"✅ Все данные синхронизированы\n\n"
+            f"✅ 1000 LEDOGE\n"
             f"💰 Твой баланс: {new_balance:.2f} LEDOGE\n\n"
-            f"🚀 Начинай майнить прямо сейчас!"
+            f"🚀 Начинай майнить!"
         )
     elif bonus_given:
         welcome_text = (
             f"👋 Привет, {user.first_name}!\n\n"
             f"🎁 **СТАРТОВЫЙ БОНУС:** 1000 LEDOGE\n\n"
-            f"💰 Твой баланс: {new_balance:.2f} LEDOGE\n\n"
-            f"Добро пожаловать в <b>CryptoSim</b> — симулятор криптоэкономики.\n\n"
-            f"🔹 <b>Что ты можешь делать:</b>\n"
-            f"• ⛏ Майнить криптовалюту\n"
-            f"• ☝ Тапать мем-коины\n"
-            f"• ⚙️ Покупать майнеров\n"
-            f"• 💱 Торговать на P2P бирже\n"
-            f"• 🎰 Крутить колесо фортуны\n"
-            f"• 👕 Покупать скины\n"
-            f"• 💱 Обменивать валюту\n"
-            f"• 🤝 Приглашать друзей\n"
-            f"• 📈 Следить за курсами\n"
-            f"• 📚 Изучать блокчейн"
+            f"💰 Твой баланс: {new_balance:.2f} LEDOGE"
         )
     else:
         welcome_text = (
             f"👋 С возвращением, {user.first_name}!\n\n"
             f"💰 Твой баланс: {new_balance:.2f} LEDOGE"
         )
+    
+    menu = await get_menu_for_user(user_id)
+    await message.answer(welcome_text, reply_markup=menu)
     
     # Проверяем реферальный параметр
     args = message.text.split()
