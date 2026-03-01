@@ -33,17 +33,50 @@ async def cmd_start(message: Message):
     # Получаем или создаем пользователя
     user_data = get_user(user_id, user.username, user.first_name)
     
-    # ПРОВЕРЯЕМ БАЛАНС И НАЧИСЛЯЕМ БОНУС, ЕСЛИ НУЖНО
-    balance = get_balance(user_id, 'ledoge')
+    # Получаем баланс ДО начисления
+    old_balance = get_balance(user_id, 'ledoge')
     
-    if balance == 0:
+    # ПРОВЕРЯЕМ И НАЧИСЛЯЕМ БОНУС
+    bonus_given = False
+    if old_balance == 0:
         # Начисляем стартовый бонус 1000 LEDOGE
         update_balance(user_id, 'ledoge', 1000, 'add')
+        new_balance = get_balance(user_id, 'ledoge')
         logger.info(f"💰 Начислен стартовый бонус 1000 LEDOGE пользователю {user_id}")
-        
+        bonus_given = True
+    else:
+        new_balance = old_balance
+    
+    # Получаем инфу о том, был ли перезапуск
+    is_after_reset = False
+    try:
+        # Проверяем, есть ли запись о перезапуске в базе
+        from database import execute_query
+        reset_flag = execute_query('SELECT value FROM settings WHERE key = "reset_occurred"', fetch_one=True)
+        if reset_flag and reset_flag[0] == 'true':
+            is_after_reset = True
+            # Удаляем флаг после прочтения
+            execute_query('UPDATE settings SET value = "false" WHERE key = "reset_occurred"')
+    except:
+        pass
+    
+    # Формируем приветствие
+    if is_after_reset and bonus_given:
+        welcome_text = (
+            f"🔄 **ВНИМАНИЕ! ПЕРЕЗАГРУЗКА ВСЕЛЕННОЙ!** 🔄\n\n"
+            f"👋 Привет, {user.first_name}!\n\n"
+            f"🌌 Крипто-вселенная LEDOGE прошла хард-форк и обновилась!\n\n"
+            f"🎁 **ТЫ ПОЛУЧИЛ:**\n"
+            f"✅ 1000 LEDOGE (стартовый бонус)\n"
+            f"✅ Все данные синхронизированы\n\n"
+            f"💰 Твой баланс: {new_balance:.2f} LEDOGE\n\n"
+            f"🚀 Начинай майнить прямо сейчас!"
+        )
+    elif bonus_given:
         welcome_text = (
             f"👋 Привет, {user.first_name}!\n\n"
-            f"🎁 Стартовый бонус: 1000 LEDOGE\n\n"
+            f"🎁 **СТАРТОВЫЙ БОНУС:** 1000 LEDOGE\n\n"
+            f"💰 Твой баланс: {new_balance:.2f} LEDOGE\n\n"
             f"Добро пожаловать в <b>CryptoSim</b> — симулятор криптоэкономики.\n\n"
             f"🔹 <b>Что ты можешь делать:</b>\n"
             f"• ⛏ Майнить криптовалюту\n"
@@ -55,13 +88,12 @@ async def cmd_start(message: Message):
             f"• 💱 Обменивать валюту\n"
             f"• 🤝 Приглашать друзей\n"
             f"• 📈 Следить за курсами\n"
-            f"• 📚 Изучать блокчейн\n\n"
-            f"Используй кнопки ниже 👇"
+            f"• 📚 Изучать блокчейн"
         )
     else:
         welcome_text = (
             f"👋 С возвращением, {user.first_name}!\n\n"
-            f"💰 Твой баланс: {balance:.2f} LEDOGE"
+            f"💰 Твой баланс: {new_balance:.2f} LEDOGE"
         )
     
     # Проверяем реферальный параметр
@@ -77,86 +109,3 @@ async def cmd_start(message: Message):
     
     menu = await get_menu_for_user(user_id)
     await message.answer(welcome_text, reply_markup=menu)
-
-@router.message(F.text == "💰 Криптокошелёк")
-async def show_wallet(message: Message):
-    user_id = message.from_user.id
-    
-    # Собираем балансы в словарь с названиями
-    balances = {}
-    for code, name in CURRENCIES.items():
-        balances[name] = get_balance(user_id, code)
-    
-    miners = get_user_miners(user_id)
-    owned_skins = get_user_owned_skins(user_id)
-    current_skin = get_user_skin(user_id)
-    
-    text = create_wallet_info(balances, miners, MINERS, owned_skins, SKINS, current_skin)
-    
-    await message.answer(text)
-
-@router.message(F.text == "📊 Топ майнеров")
-async def show_top(message: Message):
-    user_id = message.from_user.id
-    
-    logger.info(f"📊 Пользователь {user_id} запросил топ")
-    
-    all_users = get_top_users()
-    
-    if not all_users:
-        logger.warning("📭 Топ пользователей пуст")
-        await message.answer("📭 Пока нет игроков в топе")
-        return
-    
-    total_users = len(all_users)
-    logger.info(f"✅ Найдено {total_users} игроков в топе")
-    
-    text = create_top_list(all_users, SKINS)
-    text += f"\n📊 Всего игроков: {total_users}"
-    
-    await message.answer(text)
-
-@router.message(F.text == "ℹ Обучение")
-async def show_education(message: Message):
-    text = (
-        create_header("КРИПТО-ЭНЦИКЛОПЕДИЯ", "📚") + "\n\n"
-        
-        "🔹 <b>Что такое блокчейн?</b>\n"
-        "Блокчейн — это цифровая цепочка блоков, где каждый блок содержит информацию о транзакциях. "
-        "Она хранится одновременно на тысячах компьютеров, поэтому её нельзя подделать или взломать.\n\n"
-        
-        "🔹 <b>Как работает майнинг?</b>\n"
-        "Майнеры решают сложные математические задачи. Кто первый нашёл решение — получает награду (новые монеты). "
-        "В нашей игре ты можешь купить майнеры, которые увеличат твой шанс на успех!\n\n"
-        
-        "🔹 <b>Что такое газ (комиссия)?</b>\n"
-        "В реальном блокчейне за каждую операцию нужно платить комиссию — это называется газ. "
-        "В нашей игре мы тоже добавили комиссию на P2P рынке, чтобы сделать экономику реалистичнее.\n\n"
-        
-        "🔹 <b>Типы криптовалют:</b>\n"
-        "• <b>Мем-коины</b> (LEDOGE, NotCoine, ShibaFloki) — созданы на основе мемов, очень волатильны\n"
-        "• <b>Альткоины</b> (Ethireum, SolanaFast) — серьёзные проекты с технологиями\n"
-        "• <b>Классика</b> (BitKoin) — первая и самая дорогая криптовалюта\n"
-        "• <b>Стейблкоины</b> (USDToken) — привязаны к доллару, не меняют цену\n\n"
-        
-        "🔹 <b>Как работает биржа?</b>\n"
-        "1. Сначала ты покупаешь USDToken за LEDOGE в обменнике\n"
-        "2. Потом можешь купить любую валюту на P2P бирже\n"
-        "3. При каждой сделке взимается комиссия (газ)\n\n"
-        
-        "🔹 <b>Совет:</b> Покупай майнеры, они увеличивают шанс добычи редких монет!\n\n"
-        
-        "<i>Хочешь узнать больше? Читай мой канал @LEDOGEchannel!</i>"
-    )
-    await message.answer(text)
-
-@router.message(F.text == "◀ Назад в меню")
-async def back_to_menu(message: Message):
-    user_id = message.from_user.id
-    
-    menu = await get_menu_for_user(user_id)
-    
-    if user_id == ADMIN_ID:
-        await message.answer("🔧 Главное меню (режим администратора):", reply_markup=menu)
-    else:
-        await message.answer("Главное меню:", reply_markup=menu)
