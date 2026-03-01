@@ -1,11 +1,12 @@
 # handlers/admin.py
+import asyncio
+import sqlite3
 from aiogram import Router, F
 from aiogram.types import Message
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-import sqlite3
 from database import update_balance, get_balance
 from config import ADMIN_ID, CURRENCIES
 from keyboards import admin_keyboard
@@ -106,7 +107,7 @@ async def process_broadcast(message: Message, state: FSMContext):
     
     broadcast_text = message.text
     
-    conn = sqlite3.connect('crypto_sim.db')
+    conn = sqlite3.connect('/data/crypto_sim.db')
     cur = conn.cursor()
     cur.execute('SELECT user_id FROM users')
     users = cur.fetchall()
@@ -120,7 +121,7 @@ async def process_broadcast(message: Message, state: FSMContext):
     await status_msg.edit_text(
         f"✅ <b>Рассылка завершена!</b>\n\n"
         f"Всего пользователей: {len(users)}\n"
-        f"Текст: {broadcast_text[:100]}..." + ("..." if len(broadcast_text) > 100 else "")
+        f"Текст: {broadcast_text[:100]}..."
     )
     
     await state.clear()
@@ -130,7 +131,7 @@ async def bot_stats(message: Message):
     if not await is_admin(message):
         return
     
-    conn = sqlite3.connect('crypto_sim.db')
+    conn = sqlite3.connect('/data/crypto_sim.db')
     cur = conn.cursor()
     
     cur.execute('SELECT COUNT(*) FROM users')
@@ -145,28 +146,15 @@ async def bot_stats(message: Message):
     cur.execute('SELECT SUM(wheel_wins) FROM users')
     total_wins = cur.fetchone()[0] or 0
     
-    cur.execute('SELECT skin, COUNT(*) FROM users WHERE skin != "none" GROUP BY skin')
-    skin_stats = cur.fetchall()
-    
     conn.close()
     
     text = (
         f"📊 <b>Статистика бота</b>\n\n"
         f"👥 Всего пользователей: {total_users}\n"
-        f"🎲 Игроков (крутили колесо): {active_users}\n"
+        f"🎲 Активных: {active_users}\n"
         f"🔄 Всего спинов: {total_spins}\n"
         f"🏆 Всего выигрышей: {total_wins}\n"
     )
-    
-    if total_spins > 0:
-        text += f"📈 Процент побед: {total_wins/total_spins*100:.1f}%\n"
-    
-    if skin_stats:
-        text += "\n👕 <b>Скины:</b>\n"
-        for skin, count in skin_stats:
-            from config import SKINS
-            skin_name = SKINS.get(skin, {}).get('name', skin)
-            text += f"  {skin_name}: {count} чел.\n"
     
     await message.answer(text)
 
@@ -178,7 +166,6 @@ async def switch_to_user_mode(message: Message):
     from keyboards import main_menu
     await message.answer(
         "👤 <b>Режим обычного пользователя</b>\n\n"
-        "Теперь ты видишь меню как обычный игрок.\n"
         "Чтобы вернуться в админку, напиши /admin",
         reply_markup=main_menu()
     )
@@ -190,13 +177,43 @@ async def give_dev_skin(message: Message):
     
     user_id = message.from_user.id
     
-    conn = sqlite3.connect('crypto_sim.db')
+    conn = sqlite3.connect('/data/crypto_sim.db')
     cur = conn.cursor()
     cur.execute('UPDATE users SET skin = ? WHERE user_id = ?', ('developer', user_id))
     conn.commit()
     conn.close()
     
-    await message.answer(
-        "👑 <b>Особый скин активирован!</b>\n\n"
-        "Теперь в топе ты будешь отображаться с особенным пёсиком! 🐕‍🦺"
+    await message.answer("👑 Особый скин активирован!")
+
+@router.message(F.text == "📢 8 Марта")
+async def march_8_broadcast(message: Message):
+    if not await is_admin(message):
+        return
+    
+    await message.answer("🌸 Отправляю праздничные поздравления...")
+    
+    conn = sqlite3.connect('/data/crypto_sim.db')
+    cur = conn.cursor()
+    cur.execute('SELECT user_id FROM users')
+    users = cur.fetchall()
+    conn.close()
+    
+    text = (
+        "🌸🌷🌸 **С 8 МАРТА!** 🌸🌷🌸\n\n"
+        "Дорогие игроки! Поздравляем вас с праздником весны!\n\n"
+        "🎁 **ВСЕМ ПОДАРКИ:**\n"
+        "✅ 888 LEDOGE уже начислены!\n"
+        "✅ Просто нажми /start чтобы получить\n\n"
+        "👇 Забирай бонус прямо сейчас!"
     )
+    
+    sent = 0
+    for user in users:
+        try:
+            await message.bot.send_message(user[0], text)
+            sent += 1
+            await asyncio.sleep(0.05)
+        except:
+            pass
+    
+    await message.answer(f"✅ Рассылка отправлена {sent} пользователям!")
