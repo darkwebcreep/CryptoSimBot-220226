@@ -70,6 +70,13 @@ SKINS = {
     'greedy': {'name': '🤑 Алчный', 'price': 100, 'currency': 'ethireum', 'emoji': '🤑', 'desc': 'Бабки, бабки песик, БАБКИ!'},
     'star': {'name': '⭐ Звёздный игрок!', 'price': 12, 'currency': 'ledoge', 'emoji': '⭐', 'desc': 'Ты звезда!'},
     'developer': {'name': '👑 Создатель (особый)', 'price': 0, 'currency': 'ledoge', 'emoji': '👑', 'desc': 'Только для создателя'}
+    'march_8_2026': {
+        'name': '🌸 Весенний 2026', 
+        'price': 0, 
+        'currency': 'ledoge', 
+        'emoji': '🌸', 
+        'desc': 'Праздничный скин в честь 8 Марта 2026'
+},
 }
 
 # Бустеры
