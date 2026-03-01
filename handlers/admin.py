@@ -6,22 +6,20 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 import sqlite3
+import json
 from database import update_balance, get_balance
 from config import ADMIN_ID, CURRENCIES
 from keyboards import admin_keyboard
 
 router = Router()
 
-# Состояния для админа
 class AdminStates(StatesGroup):
     waiting_coin_give = State()
     waiting_broadcast = State()
 
-# Проверка на админа
 async def is_admin(message: Message) -> bool:
     return message.from_user.id == ADMIN_ID
 
-# Вход в админ-панель
 @router.message(F.text == "/admin")
 async def admin_panel(message: Message):
     if not await is_admin(message):
@@ -34,7 +32,6 @@ async def admin_panel(message: Message):
         reply_markup=admin_keyboard()
     )
 
-# Выдача монет
 @router.message(F.text == "🔧 Выдать монеты")
 async def give_coins_start(message: Message, state: FSMContext):
     if not await is_admin(message):
@@ -44,7 +41,6 @@ async def give_coins_start(message: Message, state: FSMContext):
         "💰 <b>Выдача монет</b>\n\n"
         "Напиши в формате: <code>user_id валюта количество</code>\n"
         "Пример: <code>123456789 ledoge 1000</code>\n\n"
-        "Чтобы узнать user_id, юзер может написать /id боту @userinfobot\n\n"
         "Доступные валюты: " + ", ".join(CURRENCIES.keys())
     )
     await state.set_state(AdminStates.waiting_coin_give)
@@ -66,13 +62,11 @@ async def process_give_coins(message: Message, state: FSMContext):
         currency = parts[1].lower()
         amount = float(parts[2])
         
-        # Проверяем валюту
         if currency not in CURRENCIES:
-            await message.answer(f"❌ Валюта {currency} не найдена. Доступны: {', '.join(CURRENCIES.keys())}")
+            await message.answer(f"❌ Валюта {currency} не найдена")
             await state.clear()
             return
         
-        # Выдаем монеты
         success = update_balance(target_id, currency, amount, 'add')
         
         if success:
@@ -84,16 +78,15 @@ async def process_give_coins(message: Message, state: FSMContext):
                 f"💰 Новый баланс: {get_balance(target_id, currency)}"
             )
         else:
-            await message.answer("❌ Ошибка при выдаче монет. Возможно, пользователь не найден в БД.")
+            await message.answer("❌ Ошибка при выдаче монет")
         
     except ValueError:
-        await message.answer("❌ Ошибка в числах. user_id и количество должны быть числами")
+        await message.answer("❌ Ошибка в числах")
     except Exception as e:
         await message.answer(f"❌ Ошибка: {e}")
     
     await state.clear()
 
-# Рассылка
 @router.message(F.text == "📢 Сделать рассылку")
 async def broadcast_start(message: Message, state: FSMContext):
     if not await is_admin(message):
@@ -114,7 +107,6 @@ async def process_broadcast(message: Message, state: FSMContext):
     
     broadcast_text = message.text
     
-    # Получаем всех пользователей из БД
     conn = sqlite3.connect('crypto_sim.db')
     cur = conn.cursor()
     cur.execute('SELECT user_id FROM users')
@@ -126,9 +118,6 @@ async def process_broadcast(message: Message, state: FSMContext):
         f"Всего получателей: {len(users)}"
     )
     
-    # В реальном проекте здесь должна быть асинхронная рассылка
-    # с обработкой ошибок и ограничений Telegram (flood wait)
-    
     await status_msg.edit_text(
         f"✅ <b>Рассылка завершена!</b>\n\n"
         f"Всего пользователей: {len(users)}\n"
@@ -137,7 +126,6 @@ async def process_broadcast(message: Message, state: FSMContext):
     
     await state.clear()
 
-# Статистика бота
 @router.message(F.text == "📊 Статистика бота")
 async def bot_stats(message: Message):
     if not await is_admin(message):
@@ -146,7 +134,6 @@ async def bot_stats(message: Message):
     conn = sqlite3.connect('crypto_sim.db')
     cur = conn.cursor()
     
-    # Общая статистика
     cur.execute('SELECT COUNT(*) FROM users')
     total_users = cur.fetchone()[0]
     
@@ -159,7 +146,6 @@ async def bot_stats(message: Message):
     cur.execute('SELECT SUM(wheel_wins) FROM users')
     total_wins = cur.fetchone()[0] or 0
     
-    # Статистика по скинам
     cur.execute('SELECT skin, COUNT(*) FROM users WHERE skin != "none" GROUP BY skin')
     skin_stats = cur.fetchall()
     
@@ -185,10 +171,8 @@ async def bot_stats(message: Message):
     
     await message.answer(text)
 
-# Переключение в режим пользователя
 @router.message(F.text == "👤 Режим пользователя")
 async def switch_to_user_mode(message: Message):
-    """Переключает админа в режим обычного пользователя"""
     if not await is_admin(message):
         return
     
@@ -202,13 +186,11 @@ async def switch_to_user_mode(message: Message):
 
 @router.message(F.text == "👑 Особый скин")
 async def give_dev_skin(message: Message):
-    """Выдает особый скин разработчика"""
     if not await is_admin(message):
         return
     
     user_id = message.from_user.id
     
-    #особый скин
     conn = sqlite3.connect('crypto_sim.db')
     cur = conn.cursor()
     cur.execute('UPDATE users SET skin = ? WHERE user_id = ?', ('developer', user_id))
@@ -217,70 +199,73 @@ async def give_dev_skin(message: Message):
     
     await message.answer(
         "👑 <b>Особый скин активирован!</b>\n\n"
+        "Теперь в топе ты будешь отображаться с особенным пёсиком! 🐕‍🦺"
     )
 
-# Добавь эти функции в конец файла handlers/admin.py
-
-@router.message(F.text == "💰 Начислить бонус")
-async def give_bonus_to_all(message: Message):
-    """Начисляет стартовый бонус всем пользователям с нулевым балансом"""
+# ========== НОВАЯ ФУНКЦИЯ ДЛЯ ПЕРЕЗАГРУЗКИ ==========
+@router.message(F.text == "🔄 Перезагрузка")
+async def announce_reset(message: Message):
+    """Объявляет о перезагрузке вселенной и раздает бонусы"""
     if not await is_admin(message):
         return
     
-    await message.answer("💰 Начисляю бонус 1000 LEDOGE всем пользователям...")
+    await message.answer("🔄 Начинаю процедуру перезагрузки вселенной...")
     
-    import sqlite3
-    conn = sqlite3.connect('/data/crypto_sim.db')
-    cur = conn.cursor()
-    cur.execute('SELECT user_id FROM users')
-    users = cur.fetchall()
-    conn.close()
-    
-    count = 0
-    for user in users:
-        user_id = user[0]
-        balance = get_balance(user_id, 'ledoge')
-        if balance == 0:
-            update_balance(user_id, 'ledoge', 1000, 'add')
-            count += 1
-    
-    await message.answer(f"✅ Бонус начислен {count} пользователям!")
+    try:
+        import sqlite3
+        import json
+        
+        conn = sqlite3.connect('/data/crypto_sim.db')
+        cur = conn.cursor()
+        
+        # Создаем таблицу настроек, если её нет
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        ''')
+        
+        # Устанавливаем флаг перезагрузки
+        cur.execute('''
+            INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)
+        ''', ('reset_occurred', 'true'))
+        
+        # Получаем всех пользователей
+        cur.execute('SELECT user_id FROM users')
+        users = cur.fetchall()
+        
+        bonus_count = 0
+        for user in users:
+            user_id = user[0]
+            
+            # Получаем текущий баланс
+            cur.execute('SELECT balances FROM balances WHERE user_id = ?', (user_id,))
+            result = cur.fetchone()
+            
+            if result and result[0]:
+                balances = json.loads(result[0])
+            else:
+                balances = {}
+            
+            # Добавляем 1000 LEDOGE
+            balances['ledoge'] = balances.get('ledoge', 0) + 1000
+            bonus_count += 1
+            
+            # Сохраняем
+            cur.execute('UPDATE balances SET balances = ? WHERE user_id = ?', 
+                       (json.dumps(balances), user_id))
+        
+        conn.commit()
+        conn.close()
+        
+        await message.answer(
+            f"✅ **ПЕРЕЗАГРУЗКА ЗАВЕРШЕНА!**\n\n"
+            f"📢 Объявление о перезагрузке будет показано всем игрокам при следующем входе.\n"
+            f"💰 Бонус 1000 LEDOGE начислен {bonus_count} пользователям!"
+        )
+        
+    except Exception as e:
+        await message.answer(f"❌ Ошибка: {e}")
 
-@router.message(F.text == "📢 Праздничная рассылка")
-async def holiday_broadcast(message: Message):
-    """Отправляет праздничное сообщение всем пользователям"""
-    if not await is_admin(message):
-        return
-    
-    await message.answer("🌸 Отправляю праздничные поздравления...")
-    
-    import sqlite3
-    import asyncio
-    
-    conn = sqlite3.connect('/data/crypto_sim.db')
-    cur = conn.cursor()
-    cur.execute('SELECT user_id FROM users')
-    users = cur.fetchall()
-    conn.close()
-    
-    text = (
-        "🌸🌷🌸 **С 8 МАРТА!** 🌸🌷🌸\n\n"
-        "Дорогие игроки! Поздравляем вас с праздником весны!\n\n"
-        "🎁 **ВСЕМ ПОДАРКИ:**\n"
-        "✅ 888 LEDOGE\n"
-        "✅ Бустер x2 на 24ч\n"
-        "✅ Праздничный скин\n\n"
-        "👇 Забирай бонус прямо сейчас!\n"
-        "Просто напиши /start"
-    )
-    
-    sent = 0
-    for user in users:
-        try:
-            await message.bot.send_message(user[0], text)
-            sent += 1
-            await asyncio.sleep(0.05)
-        except:
-            pass
-    
-    await message.answer(f"✅ Рассылка отправлена {sent} пользователям!")
+# ========== КОНЕЦ НОВОЙ ФУНКЦИИ ==========
