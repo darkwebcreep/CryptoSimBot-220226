@@ -25,28 +25,29 @@ class SkinShopStates(StatesGroup):
 # Словарь для временного хранения выбранного скина
 temp_skin_choice = {}
 
-# Полный список скинов с номерами
+# Полный список скинов с номерами (С ПРАЗДНИЧНЫМ СКИНОМ ПЕРВЫМ)
 ALL_SKINS = [
-    (1, 'bronze', 'Бронзовая кость', 500, 'ledoge', '🥉', 'Простая кость для простых людей'),
-    (2, 'silver', 'Серебряный бульдог', 2000, 'ledoge', '🥈', 'Серебро всегда в цене'),
-    (3, 'gold', 'Золотой бульдог', 5000, 'ledoge', '🥇', 'Король крипты!'),
-    (4, 'diamond', 'Бриллиантовый бульдог', 10000, 'ledoge', '💎', 'Бриллиантовая ручка'),
-    (5, 'satoshi', 'Satoshi Nakamoto', 10, 'bitkoin', '👤', 'Никто не узнает кто ты'),
-    (6, 'joseph', 'Джозеф', 50, 'ledoge', '🐺', 'Это будет замечательный день, замечательный...'),
-    (7, 'enlightened', 'Просвещённый', 10, 'ledoge', '📖', 'Тяжело в учении - легко в бою!'),
-    (8, 'bateman', 'Патрик Бейтман', 20, 'ledoge', '🪓', 'Я люблю свою работу. Она приносит мне кучу денег.'),
-    (9, 'autoclicker', 'АвтоКликер', 1000, 'notcoine', '👆', 'Самый быстрый палец на диком западе'),
-    (10, 'hachiko', 'Хатико', 10000, 'shibafloki', '😞', 'Я буду ждать торги...'),
-    (11, 'heisenberg', 'Хайзенберг', 10, 'tonkoin', '👨‍🔬', 'Скажи моё имя'),
-    (12, 'superpepper', 'Суперперец!', 5, 'tonkoin', '🌶️', 'Почему только это и Мухаммед?!'),
-    (13, 'belfort', 'Джордан Белфорт', 500000, 'ledoge', '💵', '22 миллиона долларов за 3 грёбаных часа!'),
-    (14, 'sonic', 'Соник', 1000000, 'notcoine', '🦔', 'Они зовут меня Соник'),
-    (15, 'error404', '404', 2, 'solanafast', '🚫', 'ERROR'),
-    (16, 'hamster', 'Хомяк', 10, 'notcoine', '🐹', 'Тап Тап Тап по хомяку'),
-    (17, 'angrybird', 'Злая птичка', 1, 'solanafast', '🐦', 'Я играю в энгри бёрдс'),
-    (18, 'greedy', 'Алчный', 100, 'ethireum', '🤑', 'Бабки, бабки песик, БАБКИ!'),
-    (19, 'star', 'Звёздный игрок!', 12, 'ledoge', '⭐', 'Ты звезда!'),
-    (20, 'developer', 'Создатель (особый)', 0, 'ledoge', '👑', 'Только для создателя')
+    (1, 'march_8_2026', '🌸 Весенний 2026', 888, 'ledoge', '🌸', 'Праздничный скин в честь 8 Марта 2026'),
+    (2, 'bronze', 'Бронзовая кость', 500, 'ledoge', '🥉', 'Простая кость для простых людей'),
+    (3, 'silver', 'Серебряный бульдог', 2000, 'ledoge', '🥈', 'Серебро всегда в цене'),
+    (4, 'gold', 'Золотой бульдог', 5000, 'ledoge', '🥇', 'Король крипты!'),
+    (5, 'diamond', 'Бриллиантовый бульдог', 10000, 'ledoge', '💎', 'Бриллиантовая ручка'),
+    (6, 'satoshi', 'Satoshi Nakamoto', 10, 'bitkoin', '👤', 'Никто не узнает кто ты'),
+    (7, 'joseph', 'Джозеф', 50, 'ledoge', '🐺', 'Это будет замечательный день, замечательный...'),
+    (8, 'enlightened', 'Просвещённый', 10, 'ledoge', '📖', 'Тяжело в учении - легко в бою!'),
+    (9, 'bateman', 'Патрик Бейтман', 20, 'ledoge', '🪓', 'Я люблю свою работу. Она приносит мне кучу денег.'),
+    (10, 'autoclicker', 'АвтоКликер', 1000, 'notcoine', '👆', 'Самый быстрый палец на диком западе'),
+    (11, 'hachiko', 'Хатико', 10000, 'shibafloki', '😞', 'Я буду ждать торги...'),
+    (12, 'heisenberg', 'Хайзенберг', 10, 'tonkoin', '👨‍🔬', 'Скажи моё имя'),
+    (13, 'superpepper', 'Суперперец!', 5, 'tonkoin', '🌶️', 'Почему только это и Мухаммед?!'),
+    (14, 'belfort', 'Джордан Белфорт', 500000, 'ledoge', '💵', '22 миллиона долларов за 3 грёбаных часа!'),
+    (15, 'sonic', 'Соник', 1000000, 'notcoine', '🦔', 'Они зовут меня Соник'),
+    (16, 'error404', '🚫 404', 2, 'solanafast', '🚫', 'ERROR'),
+    (17, 'hamster', '🐹 Хомяк', 10, 'notcoine', '🐹', 'Тап Тап Тап по хомяку'),
+    (18, 'angrybird', '🐦 Злая птичка', 1, 'solanafast', '🐦', 'Я играю в энгри бёрдс'),
+    (19, 'greedy', '🤑 Алчный', 100, 'ethireum', '🤑', 'Бабки, бабки песик, БАБКИ!'),
+    (20, 'star', '⭐ Звёздный игрок!', 12, 'ledoge', '⭐', 'Ты звезда!'),
+    (21, 'developer', '👑 Создатель (особый)', 0, 'ledoge', '👑', 'Только для создателя')
 ]
 
 SKIN_BY_NUMBER = {str(num): (key, name, price, currency, emoji, desc) for num, key, name, price, currency, emoji, desc in ALL_SKINS}
@@ -165,7 +166,7 @@ async def process_wardrobe_number(message: Message, state: FSMContext):
     
     # Проверяем номер
     if text not in SKIN_BY_NUMBER:
-        await message.answer("❌ Неправильный номер. Введи число от 1 до 19")
+        await message.answer("❌ Неправильный номер. Введи число от 1 до 21")
         return
     
     skin_num = text
@@ -212,7 +213,7 @@ async def process_skin_number(message: Message, state: FSMContext):
     
     # Проверяем номер
     if text not in SKIN_BY_NUMBER:
-        await message.answer("❌ Неправильный номер. Введи число от 1 до 19")
+        await message.answer("❌ Неправильный номер. Введи число от 1 до 21")
         return
     
     skin_num = text
@@ -318,15 +319,3 @@ async def back_to_main(message: Message):
         await message.answer("🔧 Админ-меню:", reply_markup=admin_keyboard())
     else:
         await message.answer("Главное меню:", reply_markup=main_menu())
-
-# В handlers/skinshop.py добавь эту функцию (в любое место)
-
-async def give_holiday_skin(user_id):
-    """Выдает праздничный скин пользователю (если еще нет)"""
-    from database import get_user_owned_skins, add_skin_to_wardrobe
-    
-    owned = get_user_owned_skins(user_id)
-    if 'march_8_2026' not in owned:
-        add_skin_to_wardrobe(user_id, 'march_8_2026')
-        return True
-    return False
