@@ -79,6 +79,15 @@ SKINS = {
     }
 }
 
+# ============= НАСТРОЙКИ РЕФЕРАЛЬНОЙ СИСТЕМЫ =============
+REFERRAL_SETTINGS = {
+    'reward_for_invite': 500,
+    'reward_percent_first_day': 0.10,
+    'reward_percent_permanent': 0.05,
+    'min_payout': 10,
+    'referral_bonus_days': 7
+}
+
 # Бустеры
 TAP_BOOSTERS = {
     'x2': {'name': '✨ x2 Множитель', 'price': 100, 'multiplier': 2, 'duration': 3600},
