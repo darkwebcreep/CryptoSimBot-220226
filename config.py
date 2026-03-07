@@ -70,8 +70,9 @@ SKINS = {
     'greedy': {'name': '🤑 Алчный', 'price': 100, 'currency': 'ethireum', 'emoji': '🤑', 'desc': 'Бабки, бабки песик, БАБКИ!'},
     'star': {'name': '⭐ Звёздный игрок!', 'price': 12, 'currency': 'ledoge', 'emoji': '⭐', 'desc': 'Ты звезда!'},
     'developer': {'name': '👑 Создатель (особый)', 'price': 0, 'currency': 'ledoge', 'emoji': '👑', 'desc': 'Только для создателя'},
+    # ПРАЗДНИЧНЫЙ СКИН - БЕЗ ЭМОДЗИ В НАЗВАНИИ!
     'march_8_2026': {
-        'name': '🌸 Весенний 2026', 
+        'name': 'Весенний 2026', 
         'price': 888, 
         'currency': 'ledoge', 
         'emoji': '🌸', 
