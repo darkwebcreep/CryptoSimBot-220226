@@ -1,9 +1,10 @@
 # handlers/common.py
 import logging
+import sqlite3
+from datetime import datetime
 from aiogram import Router, F
 from aiogram.types import Message
 from aiogram.filters import Command
-from datetime import datetime
 
 from database import get_user, get_balance, get_user_skin, get_top_users, get_user_miners, get_user_owned_skins, update_balance
 from config import CURRENCIES, ADMIN_ID, MINERS, SKINS
@@ -13,6 +14,63 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
+# ==================== ФУНКЦИИ ДЛЯ ПРАЗДНИЧНОГО БОНУСА ====================
+
+def has_received_holiday_bonus_today(user_id):
+    """Проверяет, получал ли пользователь праздничный бонус сегодня"""
+    try:
+        conn = sqlite3.connect('/data/crypto_sim.db')
+        cur = conn.cursor()
+        
+        # Создаем таблицу для хранения бонусов, если её нет
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS holiday_bonus (
+                user_id INTEGER PRIMARY KEY,
+                last_bonus_date TEXT
+            )
+        ''')
+        
+        # Проверяем, получал ли бонус сегодня
+        cur.execute('SELECT last_bonus_date FROM holiday_bonus WHERE user_id = ?', (user_id,))
+        result = cur.fetchone()
+        
+        if result:
+            last_date = datetime.fromisoformat(result[0]).date()
+            today = datetime.now().date()
+            return last_date == today
+        else:
+            return False
+    except Exception as e:
+        logger.error(f"Ошибка при проверке бонуса: {e}")
+        return False
+    finally:
+        conn.close()
+
+def mark_holiday_bonus_received(user_id):
+    """Отмечает, что пользователь получил бонус сегодня"""
+    try:
+        conn = sqlite3.connect('/data/crypto_sim.db')
+        cur = conn.cursor()
+        
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS holiday_bonus (
+                user_id INTEGER PRIMARY KEY,
+                last_bonus_date TEXT
+            )
+        ''')
+        
+        today = datetime.now().isoformat()
+        cur.execute('''
+            INSERT OR REPLACE INTO holiday_bonus (user_id, last_bonus_date)
+            VALUES (?, ?)
+        ''', (user_id, today))
+        
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Ошибка при сохранении бонуса: {e}")
+    finally:
+        conn.close()
+
 async def get_menu_for_user(user_id):
     """Возвращает нужное меню в зависимости от того, админ ли пользователь"""
     if user_id == ADMIN_ID:
@@ -21,6 +79,8 @@ async def get_menu_for_user(user_id):
     else:
         from keyboards import main_menu
         return main_menu()
+
+# ==================== ОСНОВНАЯ ФУНКЦИЯ START ====================
 
 @router.message(Command("start"))
 async def cmd_start(message: Message):
@@ -35,42 +95,37 @@ async def cmd_start(message: Message):
     # Получаем баланс
     balance = get_balance(user_id, 'ledoge')
     
-    # ========== ПРАЗДНИЧНЫЙ РЕЖИМ ВКЛЮЧЕН ПРИНУДИТЕЛЬНО ==========
-    # Даем всем праздничный бонус 888 LEDOGE
-    update_balance(user_id, 'ledoge', 888, 'add')
-    balance += 888
+    # ========== ПРОВЕРЯЕМ ПРАЗДНИЧНЫЙ БОНУС (ТОЛЬКО РАЗ) ==========
+    holiday_bonus_given = False
+    bonus_text = ""
     
-    # Если баланс был 0 - это новый пользователь
-    if balance == 888:  # Был 0, получил 888
-        welcome_text = (
-            f"🌸🌷🌸 **С 8 МАРТА, {user.first_name}!** 🌸🌷🌸\n\n"
-            f"🎁 **ПРАЗДНИЧНЫЙ БОНУС:**\n"
-            f"✅ 888 LEDOGE в подарок!\n"
-            f"✅ + 1000 LEDOGE стартовые\n\n"
-            f"💰 Твой баланс: {balance + 1000:.2f} LEDOGE\n\n"
-            f"Добро пожаловать в <b>CryptoSim</b> — симулятор криптоэкономики.\n\n"
-            f"🔹 <b>Что ты можешь делать:</b>\n"
-            f"• ⛏ Майнить криптовалюту\n"
-            f"• ☝ Тапать мем-коины\n"
-            f"• ⚙️ Покупать майнеров\n"
-            f"• 💱 Торговать на P2P бирже\n"
-            f"• 🎰 Крутить колесо фортуны\n"
-            f"• 👕 Покупать скины\n"
-            f"• 💱 Обменивать валюту\n"
-            f"• 🤝 Приглашать друзей\n"
-            f"• 📈 Следить за курсами\n"
-            f"• 📚 Изучать блокчейн\n\n"
-            f"Используй кнопки ниже 👇"
-        )
-        # Добавляем стартовые 1000
+    if not has_received_holiday_bonus_today(user_id):
+        # Даем праздничный бонус 888 LEDOGE (только раз в день)
+        update_balance(user_id, 'ledoge', 888, 'add')
+        balance += 888
+        mark_holiday_bonus_received(user_id)
+        holiday_bonus_given = True
+        bonus_text = "✅ 888 LEDOGE (праздничный бонус)\n"
+        logger.info(f"🌸 Праздничный бонус начислен пользователю {user_id}")
+    
+    # Стартовый бонус для новых (только если баланс был 0)
+    if balance == 888 and holiday_bonus_given:  # Новый пользователь получил только праздничный
         update_balance(user_id, 'ledoge', 1000, 'add')
         balance += 1000
-    else:
-        # Уже был баланс - просто даем 888
+        bonus_text += "✅ 1000 LEDOGE (стартовый бонус)\n"
+    
+    # Формируем приветствие
+    if holiday_bonus_given:
         welcome_text = (
             f"🌸🌷🌸 **С 8 МАРТА, {user.first_name}!** 🌸🌷🌸\n\n"
-            f"🎁 **ПРАЗДНИЧНЫЙ БОНУС:**\n"
-            f"✅ 888 LEDOGE в подарок!\n\n"
+            f"🎁 **ТЫ ПОЛУЧИЛ:**\n"
+            f"{bonus_text}"
+            f"\n💰 Твой баланс: {balance:.2f} LEDOGE\n\n"
+            f"Добро пожаловать в <b>CryptoSim</b>!"
+        )
+    else:
+        welcome_text = (
+            f"👋 С возвращением, {user.first_name}!\n\n"
             f"💰 Твой баланс: {balance:.2f} LEDOGE"
         )
     
