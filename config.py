@@ -88,6 +88,17 @@ REFERRAL_SETTINGS = {
     'referral_bonus_days': 7
 }
 
+# ============= НАСТРОЙКИ ВОЛАТИЛЬНОСТИ =============
+VOLATILITY_SETTINGS = {
+    'update_interval': 3600,
+    'max_change': 0.15,
+    'min_change': 0.05,
+    'crash_chance': 0.01,
+    'crash_multiplier': 0.5,
+    'moon_chance': 0.01,
+    'moon_multiplier': 2.0
+}
+
 # Бустеры
 TAP_BOOSTERS = {
     'x2': {'name': '✨ x2 Множитель', 'price': 100, 'multiplier': 2, 'duration': 3600},
