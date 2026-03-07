@@ -2,7 +2,7 @@
 import asyncio
 import random
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from aiogram import Router, F
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.context import FSMContext
@@ -170,6 +170,11 @@ async def show_boosters(message: Message):
 async def start_mining_process(message: Message, state: FSMContext, coin_name: str, base_chance: float, reward: float, wait_time: int, currency: str, username: str, user_id: int):
     """Основной процесс майнинга"""
     bonus_multiplier = get_miner_bonus(user_id)
+    
+    # ========== ПРАЗДНИЧНЫЙ МНОЖИТЕЛЬ ==========
+    # Увеличиваем шанс на 20% в честь 8 марта
+    bonus_multiplier *= 1.2
+    
     final_chance = min(base_chance * bonus_multiplier, 0.95)
     
     logger.info(f"⛏ {username} начал майнинг {coin_name}")
@@ -262,13 +267,11 @@ async def start_mining(message: Message, state: FSMContext, coin_name: str, base
     user_id = message.from_user.id
     username = message.from_user.username or message.from_user.first_name
     
-    # Проверяем тайм-аут
     can_start, wait_time_left = can_start_mining(user_id)
     if not can_start:
         await message.answer(f"⏳ Подожди еще {wait_time_left} секунд перед новым майнингом")
         return
     
-    # Проверяем, не майнит ли уже
     current_state = await state.get_state()
     if current_state:
         kb = [
@@ -604,27 +607,8 @@ async def back_to_main(message: Message):
     username = message.from_user.username or message.from_user.first_name
     logger.info(f"◀ {username} вернулся в главное меню")
     
-    # Очищаем состояние при выходе в меню
-    await state.clear()
-    
     if user_id == ADMIN_ID:
         from keyboards import admin_keyboard
         await message.answer("🔧 Админ-меню:", reply_markup=admin_keyboard())
     else:
         await message.answer("Главное меню:", reply_markup=main_menu())
-
-async def clean_old_mining_records():
-    """Очищает старые записи о майнинге"""
-    from datetime import datetime, timedelta
-    global last_mining_time
-    
-    while True:
-        await asyncio.sleep(3600)  # Каждый час
-        now = datetime.now()
-        to_delete = []
-        for user_id, last_time in last_mining_time.items():
-            if now - last_time > timedelta(minutes=5):
-                to_delete.append(user_id)
-        for user_id in to_delete:
-            del last_mining_time[user_id]
-        logger.info(f"🧹 Очищено {len(to_delete)} старых записей майнинга")
