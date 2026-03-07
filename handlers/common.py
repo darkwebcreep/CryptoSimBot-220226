@@ -35,7 +35,7 @@ async def cmd_start(message: Message):
     # Получаем баланс
     balance = get_balance(user_id, 'ledoge')
     
-    # ========== 8 МАРТА - ПРАЗДНИЧНЫЙ РЕЖИМ ==========
+    # ========== ПРАЗДНИЧНЫЙ РЕЖИМ ВКЛЮЧЕН ПРИНУДИТЕЛЬНО ==========
     # Даем всем праздничный бонус 888 LEDOGE
     update_balance(user_id, 'ledoge', 888, 'add')
     balance += 888
